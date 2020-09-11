@@ -1,0 +1,14 @@
+{
+  "name": "@piedao/dough-liquidity-mining",
+  "version": "0.0.0.01",
+  "main": "index.js",
+  "repository": "https://github.com/pie-dao/dough-liquidity-mining.git",
+  "author": "Mick de Graaf <mick@mickdegraaf.nl>",
+  "license": "MIT",
+  "scripts": {
+    "remix": "remixd -s . --remix-ide https://remix.ethereum.org"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^2.4.0"
+  }
+}
