@@ -108,7 +108,7 @@ contract ReferalRewards is LPTokenWrapper, IRewardDistributionRecipient {
         emit Staked(msg.sender, amount);
         
         // Only set if not set yet
-        if(referral == address(0)) {
+        if(referralOf[msg.sender] == address(0)) {
             referralOf[msg.sender] = referral;
             emit ReferralSet(msg.sender, referral);
         }
