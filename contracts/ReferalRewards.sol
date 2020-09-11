@@ -134,9 +134,10 @@ contract ReferalRewards is LPTokenWrapper, IRewardDistributionRecipient {
         }
 
         if(referralOf[msg.sender] != address(0)) {
+            uint256 referral = referralOf[msg.sender];
             uint256 referralReward = reward.mul(referralPercentage).div(10**18);
-            rewards[referralOf[msg.sender]] = rewards[referralOf[msg.sender]].add(referralReward);
-            emit ReferralReward(msg.sender, referralOf[msg.sender], referralReward);
+            rewards[referral] = rewards[referral].add(referralReward);
+            emit ReferralReward(msg.sender, referral, referralReward);
         }
     }
 
