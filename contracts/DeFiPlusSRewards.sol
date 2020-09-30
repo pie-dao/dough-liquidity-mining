@@ -38,7 +38,7 @@ contract LPTokenWrapper {
 }
 
 contract DefiPlusSRewards is LPTokenWrapper, IRewardDistributionRecipient {
-    IERC20 public dough = IERC20(0xad32a8e6220741182940c5abf610bde99e737b2d);
+    IERC20 public dough = IERC20(0xad32A8e6220741182940c5aBF610bDE99E737b2D);
     uint256 public constant DURATION = 7 days;
 
     uint256 public periodFinish = 0;
