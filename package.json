@@ -1,6 +1,6 @@
 {
   "name": "@piedao/dough-liquidity-mining",
-  "version": "0.0.0.01",
+  "version": "0.0.0.1",
   "main": "index.js",
   "repository": "https://github.com/pie-dao/dough-liquidity-mining.git",
   "author": "Mick de Graaf <mick@mickdegraaf.nl>",
