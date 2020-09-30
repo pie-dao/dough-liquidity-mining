@@ -101,12 +101,10 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         emit Staked(msg.sender, amount);
     }
 
-    function stake(uint256 amount, address referral) public updateReward(msg.sender) {
-        require(amount > 0, "Cannot stake 0");
-        super.stake(amount);
-        emit Staked(msg.sender, amount);
+    function stake(uint256 amount, address referral) public {
+        stake(amount);
         
-        // Only set if not set yet
+        // Only set if referral is not set yet
         if(referralOf[msg.sender] == address(0)) {
             referralOf[msg.sender] = referral;
             emit ReferralSet(msg.sender, referral);

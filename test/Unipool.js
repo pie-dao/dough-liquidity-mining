@@ -310,6 +310,71 @@ contract("Unipool", function ([_, wallet1, wallet2, wallet3, wallet4]) {
       ).to.be.bignumber.almostEqualDiv1e18(web3.utils.toWei("144000"));
     });
 
+    it("One staker on 2 durations with gap, with referral", async function () {
+      // 72000 SNX per week for 1 weeks
+      await this.pool.notifyRewardAmount(web3.utils.toWei("72000"), {
+        from: wallet1,
+      });
+
+      const tx = await this.pool.methods["stake(uint256,address)"](
+        web3.utils.toWei("1"),
+        wallet4,
+        {
+          from: wallet1,
+        }
+      );
+      expect(tx.logs[1].event).to.be.eq("ReferralSet");
+      expect(tx.logs[1].args["0"]).to.be.eq(wallet1);
+      expect(tx.logs[1].args["1"]).to.be.eq(wallet4);
+
+      await timeIncreaseTo(this.started.add(time.duration.weeks(2)));
+
+      expect(
+        await this.pool.rewardPerToken()
+      ).to.be.bignumber.almostEqualDiv1e18(web3.utils.toWei("72000"));
+      expect(
+        await this.pool.earned(wallet1)
+      ).to.be.bignumber.almostEqualDiv1e18(web3.utils.toWei("72000"));
+
+      // 72000 SNX per week for 1 weeks
+      await this.pool.notifyRewardAmount(web3.utils.toWei("72000"), {
+        from: wallet1,
+      });
+
+      await timeIncreaseTo(this.started.add(time.duration.weeks(3)));
+
+      expect(
+        await this.pool.rewardPerToken()
+      ).to.be.bignumber.almostEqualDiv1e18(web3.utils.toWei("144000"));
+      expect(
+        await this.pool.earned(wallet1)
+      ).to.be.bignumber.almostEqualDiv1e18(web3.utils.toWei("144000"));
+    });
+
+    it("Test stake edge case", async function () {
+      const tx = await this.pool.methods["stake(uint256,address)"](
+        web3.utils.toWei("1"),
+        wallet4,
+        {
+          from: wallet4,
+        }
+      );
+      expect(tx.logs[1].event).to.be.eq("ReferralSet");
+      expect(tx.logs[1].args["0"]).to.be.eq(wallet4);
+      expect(tx.logs[1].args["1"]).to.be.eq(wallet4);
+
+      const tx2 = await this.pool.methods["stake(uint256,address)"](
+        web3.utils.toWei("1"),
+        wallet3,
+        {
+          from: wallet4,
+        }
+      );
+      // expect ReferralSet not to be thrown
+      expect(tx2.logs.length).to.be.eq(1);
+      expect(tx2.logs[0].event).to.be.eq("Staked");
+    });
+
     it("Notify Reward Amount from mocked distribution to 10,000", async function () {
       // 10000 SNX per week for 1 weeks
       await this.pool.notifyRewardAmount(web3.utils.toWei("10000"), {
