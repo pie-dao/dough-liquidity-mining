@@ -308,6 +308,14 @@ contract("Unipool", function ([_, wallet1, wallet2, wallet3, wallet4]) {
       expect(
         await this.pool.earned(wallet1)
       ).to.be.bignumber.almostEqualDiv1e18(web3.utils.toWei("144000"));
+
+      const reward = await this.pool.getReward({ from: wallet1 });
+      expect(reward.logs.length).to.be.eq(1);
+      expect(reward.logs[0].event).to.be.eq("RewardPaid");
+      expect(reward.logs[0].args["0"]).to.be.eq(wallet1);
+      expect(reward.logs[0].args["1"]).to.be.bignumber.almostEqualDiv1e18(
+        web3.utils.toWei("144000")
+      );
     });
 
     it("One staker on 2 durations with gap, with referral", async function () {
@@ -349,6 +357,21 @@ contract("Unipool", function ([_, wallet1, wallet2, wallet3, wallet4]) {
       expect(
         await this.pool.earned(wallet1)
       ).to.be.bignumber.almostEqualDiv1e18(web3.utils.toWei("144000"));
+
+      const reward = await this.pool.getReward({ from: wallet1 });
+      expect(reward.logs.length).to.be.eq(2);
+      expect(reward.logs[0].event).to.be.eq("RewardPaid");
+      expect(reward.logs[0].args["0"]).to.be.eq(wallet1);
+      expect(reward.logs[0].args["1"]).to.be.bignumber.almostEqualDiv1e18(
+        web3.utils.toWei("144000")
+      );
+
+      expect(reward.logs[1].event).to.be.eq("ReferralReward");
+      expect(reward.logs[1].args["0"]).to.be.eq(wallet1);
+      expect(reward.logs[1].args["1"]).to.be.eq(wallet4);
+      expect(reward.logs[1].args["2"])
+        // 1440 as it is 1% of 144000
+        .to.be.bignumber.almostEqualDiv1e18(web3.utils.toWei("1440"));
     });
 
     it("Test stake edge case", async function () {
