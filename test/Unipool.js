@@ -1,6 +1,7 @@
 const { BN, time } = require("openzeppelin-test-helpers");
-const { expect } = require("chai");
-
+const { use, expect } = require("chai");
+const { solidity } = require("ethereum-waffle");
+use(solidity);
 const Uni = artifacts.require("UniMock");
 const Snx = artifacts.require("SnxMock");
 const Unipool = artifacts.require("ReferralMock");
@@ -375,16 +376,35 @@ contract("Unipool", function ([_, wallet1, wallet2, wallet3, wallet4]) {
     });
 
     it("Test stake edge case", async function () {
+      await expect(
+        this.pool.methods["stake(uint256,address)"](
+          web3.utils.toWei("1"),
+          wallet4,
+          {
+            from: wallet4,
+          }
+        )
+      ).to.be.revertedWith("WRONG_REFERRAL");
+      await expect(
+        this.pool.methods["stake(uint256,address)"](
+          web3.utils.toWei("1"),
+          "0x0000000000000000000000000000000000000000",
+          {
+            from: wallet4,
+          }
+        )
+      ).to.be.revertedWith("WRONG_REFERRAL");
+
       const tx = await this.pool.methods["stake(uint256,address)"](
         web3.utils.toWei("1"),
-        wallet4,
+        wallet2,
         {
           from: wallet4,
         }
       );
       expect(tx.logs[1].event).to.be.eq("ReferralSet");
       expect(tx.logs[1].args["0"]).to.be.eq(wallet4);
-      expect(tx.logs[1].args["1"]).to.be.eq(wallet4);
+      expect(tx.logs[1].args["1"]).to.be.eq(wallet2);
 
       const tx2 = await this.pool.methods["stake(uint256,address)"](
         web3.utils.toWei("1"),

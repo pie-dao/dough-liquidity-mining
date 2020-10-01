@@ -106,6 +106,8 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         
         // Only set if referral is not set yet
         if(referralOf[msg.sender] == address(0)) {
+            require(referral != msg.sender, "WRONG_REFERRAL");
+            require(referral != address(0), "WRONG_REFERRAL");
             referralOf[msg.sender] = referral;
             emit ReferralSet(msg.sender, referral);
         }
