@@ -376,24 +376,25 @@ contract("Unipool", function ([_, wallet1, wallet2, wallet3, wallet4]) {
     });
 
     it("Test stake edge case", async function () {
-      await expect(
-        this.pool.methods["stake(uint256,address)"](
-          web3.utils.toWei("1"),
-          wallet4,
-          {
-            from: wallet4,
-          }
-        )
-      ).to.be.revertedWith("WRONG_REFERRAL");
-      await expect(
-        this.pool.methods["stake(uint256,address)"](
-          web3.utils.toWei("1"),
-          "0x0000000000000000000000000000000000000000",
-          {
-            from: wallet4,
-          }
-        )
-      ).to.be.revertedWith("WRONG_REFERRAL");
+      const txSame = await this.pool.methods["stake(uint256,address)"](
+        web3.utils.toWei("1"),
+        wallet4,
+        {
+          from: wallet4,
+        }
+      );
+      expect(txSame.logs.length).to.be.eq(1);
+      expect(txSame.logs[0].event).to.be.eq("Staked");
+
+      const txZero = await this.pool.methods["stake(uint256,address)"](
+        web3.utils.toWei("1"),
+        "0x0000000000000000000000000000000000000000",
+        {
+          from: wallet4,
+        }
+      );
+      expect(txZero.logs.length).to.be.eq(1);
+      expect(txZero.logs[0].event).to.be.eq("Staked");
 
       const tx = await this.pool.methods["stake(uint256,address)"](
         web3.utils.toWei("1"),
