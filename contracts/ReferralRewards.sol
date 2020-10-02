@@ -10,7 +10,7 @@ contract LPTokenWrapper {
     using SafeERC20 for IERC20;
 
     // TODO setup pool for DeFi+S
-    IERC20 public uni = IERC20(0xe9Cf7887b93150D4F2Da7dFc6D502B216438F244);
+    IERC20 public uni = IERC20(0x35333CF3Db8e334384EC6D2ea446DA6e445701dF);
 
     uint256 private _totalSupply;
     mapping(address => uint256) private _balances;
@@ -37,7 +37,7 @@ contract LPTokenWrapper {
 }
 
 contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
-    IERC20 public dough = IERC20(0xad32A8e6220741182940c5aBF610bDE99E737b2D);
+    IERC20 public dough = IERC20(0xaD6A626aE2B43DCb1B39430Ce496d2FA0365BA9C);
     uint256 public constant DURATION = 7 days;
 
     uint256 public periodFinish = 0;
@@ -54,7 +54,7 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     event ReferralSet(address indexed user, address indexed referral);
     event ReferralReward(address indexed user, address indexed referral, uint256 amount);
 
-    mapping(address => address) referralOf;
+    mapping(address => address) public referralOf;
     // 1%
     uint256 referralPercentage = 1 * 10 ** 16;
 
