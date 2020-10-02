@@ -36,7 +36,7 @@ contract LPTokenWrapper {
     }
 }
 
-contract ReferalRewards is LPTokenWrapper, IRewardDistributionRecipient {
+contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     IERC20 public dough = IERC20(0xad32A8e6220741182940c5aBF610bDE99E737b2D);
     uint256 public constant DURATION = 7 days;
 
@@ -101,13 +101,11 @@ contract ReferalRewards is LPTokenWrapper, IRewardDistributionRecipient {
         emit Staked(msg.sender, amount);
     }
 
-    function stake(uint256 amount, address referral) public updateReward(msg.sender) {
-        require(amount > 0, "Cannot stake 0");
-        super.stake(amount);
-        emit Staked(msg.sender, amount);
+    function stake(uint256 amount, address referral) public {
+        stake(amount);
         
-        // Only set if not set yet
-        if(referralOf[msg.sender] == address(0)) {
+        // Only set if referral is not set yet
+        if(referralOf[msg.sender] == address(0) && referral != msg.sender && referral != address(0)) {
             referralOf[msg.sender] = referral;
             emit ReferralSet(msg.sender, referral);
         }
