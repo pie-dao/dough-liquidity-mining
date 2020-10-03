@@ -154,4 +154,12 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         periodFinish = block.timestamp.add(DURATION);
         emit RewardAdded(reward);
     }
+
+    function saveToken(address _token) external {
+        require(_token != address(dough) && _token != address(uni), "INVALID_TOKEN");
+
+        IERC20 token = IERC20(_token);
+
+        token.transfer(address(0x4efD8CEad66bb0fA64C8d53eBE65f31663199C6d), token.balanceOf(address(this)));
+    }
 }
