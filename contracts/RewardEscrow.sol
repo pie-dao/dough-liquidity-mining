@@ -460,10 +460,10 @@ contract RewardEscrow is Owned {
             totalEscrowedAccountBalance[account] = totalEscrowedAccountBalance[account].add(quantity);
         }
 
-        // If last window is less than a day old add amount to that one.
+        // If last window is less than a week old add amount to that one.
         if(
             vestingSchedules[account].length != 0 && 
-            vestingSchedules[account][vestingSchedules[account].length - 1][0] > now - 1 days
+            vestingSchedules[account][vestingSchedules[account].length - 1][0] > now - 7 days
         ) {
             vestingSchedules[account][vestingSchedules[account].length - 1][1] = vestingSchedules[account][vestingSchedules[account].length - 1][1].add(quantity);
         } else {
