@@ -1,138 +1,8 @@
+pragma solidity ^0.5.12;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
-
-/*
------------------------------------------------------------------
-FILE INFORMATION
------------------------------------------------------------------
-
-file:       Owned.sol
-version:    1.1
-author:     Anton Jurisevic
-            Dominic Romanowski
-
-date:       2018-2-26
-
------------------------------------------------------------------
-MODULE DESCRIPTION
------------------------------------------------------------------
-
-An Owned contract, to be inherited by other contracts.
-Requires its owner to be explicitly set in the constructor.
-Provides an onlyOwner access modifier.
-
-To change owner, the current owner must nominate the next owner,
-who then has to accept the nomination. The nomination can be
-cancelled before it is accepted by the new owner by having the
-previous owner change the nomination (setting it to 0).
-
------------------------------------------------------------------
-*/
-
-
-/**
- * @title A contract with an owner.
- * @notice Contract ownership can be transferred by first nominating the new owner,
- * who must then accept the ownership, which prevents accidental incorrect ownership transfers.
- */
-contract Owned {
-    address public owner;
-    address public nominatedOwner;
-
-    /**
-     * @dev Owned Constructor
-     */
-    constructor(address _owner)
-        public
-    {
-        require(_owner != address(0), "Owner address cannot be 0");
-        owner = _owner;
-        emit OwnerChanged(address(0), _owner);
-    }
-
-    /**
-     * @notice Nominate a new owner of this contract.
-     * @dev Only the current owner may nominate a new owner.
-     */
-    function nominateNewOwner(address _owner)
-        external
-        onlyOwner
-    {
-        nominatedOwner = _owner;
-        emit OwnerNominated(_owner);
-    }
-
-    /**
-     * @notice Accept the nomination to be owner.
-     */
-    function acceptOwnership()
-        external
-    {
-        require(msg.sender == nominatedOwner, "You must be nominated before you can accept ownership");
-        emit OwnerChanged(owner, nominatedOwner);
-        owner = nominatedOwner;
-        nominatedOwner = address(0);
-    }
-
-    modifier onlyOwner
-    {
-        require(msg.sender == owner, "Only the contract owner may perform this action");
-        _;
-    }
-
-    event OwnerNominated(address newOwner);
-    event OwnerChanged(address oldOwner, address newOwner);
-}
-
-
-contract IFeePool {
-    address public FEE_ADDRESS;
-    function amountReceivedFromExchange(uint value) external view returns (uint);
-    function amountReceivedFromTransfer(uint value) external view returns (uint);
-    function feePaid(bytes4 currencyKey, uint amount) external;
-    function appendAccountIssuanceRecord(address account, uint lockedAmount, uint debtEntryIndex) external;
-    function rewardsMinted(uint amount) external;
-    function transferFeeIncurred(uint value) public view returns (uint);
-}
-
-
-contract ISynthetixState {
-    // A struct for handing values associated with an individual user's debt position
-    struct IssuanceData {
-        // Percentage of the total debt owned at the time
-        // of issuance. This number is modified by the global debt
-        // delta array. You can figure out a user's exit price and
-        // collateralisation ratio using a combination of their initial
-        // debt and the slice of global debt delta which applies to them.
-        uint initialDebtOwnership;
-        // This lets us know when (in relative terms) the user entered
-        // the debt pool so we can calculate their exit price and
-        // collateralistion ratio
-        uint debtEntryIndex;
-    }
-
-    uint[] public debtLedger;
-    uint public issuanceRatio;
-    mapping(address => IssuanceData) public issuanceData;
-
-    function debtLedgerLength() external view returns (uint);
-    function hasIssued(address account) external view returns (bool);
-    function incrementTotalIssuerCount() external;
-    function decrementTotalIssuerCount() external;
-    function setCurrentIssuanceData(address account, uint initialDebtOwnership) external;
-    function lastDebtLedgerEntry() external view returns (uint);
-    function appendDebtLedgerValue(uint value) external;
-    function clearIssuanceData(address account) external;
-}
-
-
-interface ISynth {
-  function burn(address account, uint amount) external;
-  function issue(address account, uint amount) external;
-  function transfer(address to, uint value) external returns (bool);
-  function triggerTokenFallbackIfNeeded(address sender, address recipient, uint amount) external;
-  function transferFrom(address from, address to, uint value) external returns (bool);
-}
+import "@openzeppelin/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 
 /**
@@ -142,60 +12,6 @@ interface ISynthetixEscrow {
     function balanceOf(address account) external view returns (uint);
     function appendVestingEntry(address account, uint quantity) external;
 }
-
-
-/**
- * @title ExchangeRates interface
- */
-interface IExchangeRates {
-    function effectiveValue(bytes4 sourceCurrencyKey, uint sourceAmount, bytes4 destinationCurrencyKey) external view returns (uint);
-
-    function rateForCurrency(bytes4 currencyKey) external view returns (uint);
-
-    function anyRateIsStale(bytes4[] calldata currencyKeys) external view returns (bool);
-
-    function rateIsStale(bytes4 currencyKey) external view returns (bool);
-}
-
-
-/**
- * @title Synthetix interface contract
- * @dev pseudo interface, actually declared as contract to hold the public getters 
- */
-
-
-contract ISynthetix {
-
-    // ========== PUBLIC STATE VARIABLES ==========
-
-    IFeePool public feePool;
-    ISynthetixEscrow public escrow;
-    ISynthetixEscrow public rewardEscrow;
-    ISynthetixState public synthetixState;
-    IExchangeRates public exchangeRates;
-
-    // ========== PUBLIC FUNCTIONS ==========
-
-    function balanceOf(address account) public view returns (uint);
-    function transfer(address to, uint value) public returns (bool);
-    function effectiveValue(bytes4 sourceCurrencyKey, uint sourceAmount, bytes4 destinationCurrencyKey) public view returns (uint);
-
-    function synthInitiatedFeePayment(address from, bytes4 sourceCurrencyKey, uint sourceAmount) external returns (bool);
-    function synthInitiatedExchange(
-        address from,
-        bytes4 sourceCurrencyKey,
-        uint sourceAmount,
-        bytes4 destinationCurrencyKey,
-        address destinationAddress) external returns (bool);
-    function collateralisationRatio(address issuer) public view returns (uint);
-    function totalIssuedSynths(bytes4 currencyKey)
-        public
-        view
-        returns (uint);
-    function getSynth(bytes4 currencyKey) public view returns (ISynth);
-    function debtBalanceOf(address issuer, bytes4 currencyKey) public view returns (uint);
-}
-
 
 /*
 -----------------------------------------------------------------
@@ -224,14 +40,13 @@ can call vest in 12 months time.
 /**
  * @title A contract to hold escrowed SNX and free them at given schedules.
  */
-contract RewardEscrow is Owned {
-
+contract RewardEscrow is Ownable {
     using SafeMath for uint;
+    using SafeERC20 for IERC20;
 
-    /* The corresponding Synthetix contract. */
-    ISynthetix public synthetix;
+    IERC20 public dough;
 
-    IFeePool public feePool;
+    mapping(address => bool) public isRewardContract;
 
     /* Lists of (timestamp, quantity) pairs per account, sorted in ascending time order.
      * These are the times at which each given quantity of SNX vests. */
@@ -253,15 +68,16 @@ contract RewardEscrow is Owned {
     * There are 5 years of the supply scedule */
     uint constant public MAX_VESTING_ENTRIES = 52*5;
 
+    uint8 public constant decimals = 18;
+    string public constant name = "Escrowed DOUGH";
+    string public constant symbol = "eDOUGH";
+
 
     /* ========== CONSTRUCTOR ========== */
 
-    constructor(address _owner, ISynthetix _synthetix, IFeePool _feePool)
-    Owned(_owner)
-    public
+    constructor(address _dough) Ownable() public
     {
-        synthetix = _synthetix;
-        feePool = _feePool;
+        dough = IERC20(_dough);
     }
 
 
@@ -270,26 +86,29 @@ contract RewardEscrow is Owned {
     /**
      * @notice set the synthetix contract address as we need to transfer SNX when the user vests
      */
-    function setSynthetix(ISynthetix _synthetix)
+    function setDough(address _dough)
     external
     onlyOwner
     {
-        synthetix = _synthetix;
-        emit SynthetixUpdated(address(_synthetix));
+        dough = IERC20(_dough);
+        emit DoughUpdated(address(_dough));
     }
 
     /**
-     * @notice set the FeePool contract as it is the only authority to be able to call
-     * appendVestingEntry with the onlyFeePool modifer
+     * @notice Add a whitelisted rewards contract
      */
-    function setFeePool(IFeePool _feePool)
-        external
-        onlyOwner
-    {
-        feePool = _feePool;
-        emit FeePoolUpdated(address(_feePool));
+    function addRewardsContract(address _rewardContract) external onlyOwner {
+        isRewardContract[_rewardContract];
+        emit RewardContractAdded(_rewardContract);
     }
 
+    /**
+     * @notice Remove a whitelisted rewards contract
+    */
+    function removeRewardsContract(address _rewardContract) external onlyOwner {
+        isRewardContract[_rewardContract];
+        emit RewardContractRemoved(_rewardContract);
+    }
 
     /* ========== VIEW FUNCTIONS ========== */
 
@@ -435,14 +254,14 @@ contract RewardEscrow is Owned {
      */
     function appendVestingEntry(address account, uint quantity)
     public
-    onlyFeePool
+    onlyRewardsContract
     {
         /* No empty or already-passed vesting entries allowed. */
         require(quantity != 0, "Quantity cannot be zero");
 
         /* There must be enough balance in the contract to provide for the vesting entry. */
         totalEscrowedBalance = totalEscrowedBalance.add(quantity);
-        require(totalEscrowedBalance <= synthetix.balanceOf(address(this)), "Must be enough balance in the contract to provide for the vesting entry");
+        require(totalEscrowedBalance <= dough.balanceOf(address(this)), "Must be enough balance in the contract to provide for the vesting entry");
 
         /* Disallow arbitrarily long vesting schedules in light of the gas limit. */
         uint scheduleLength = vestingSchedules[account].length;
@@ -470,7 +289,7 @@ contract RewardEscrow is Owned {
             vestingSchedules[account].push([time, quantity]);
         }
         
-
+        emit Transfer(address(0), account, quantity);
         emit VestingEntryCreated(account, now, quantity);
     }
 
@@ -501,29 +320,32 @@ contract RewardEscrow is Owned {
             totalEscrowedBalance = totalEscrowedBalance.sub(total);
             totalEscrowedAccountBalance[msg.sender] = totalEscrowedAccountBalance[msg.sender].sub(total);
             totalVestedAccountBalance[msg.sender] = totalVestedAccountBalance[msg.sender].add(total);
-            synthetix.transfer(msg.sender, total);
+            dough.safeTransfer(msg.sender, total);
             emit Vested(msg.sender, now, total);
+            emit Transfer(msg.sender, address(0), total);
         }
     }
 
     /* ========== MODIFIERS ========== */
 
-    modifier onlyFeePool() {
-        bool isFeePool = msg.sender == address(feePool);
-
-        require(isFeePool, "Only the FeePool contracts can perform this action");
+    modifier onlyRewardsContract() {
+        require(isRewardContract[msg.sender], "Only reward contract can perform this action");
         _;
     }
 
 
     /* ========== EVENTS ========== */
 
-    event SynthetixUpdated(address newSynthetix);
-
-    event FeePoolUpdated(address newFeePool);
+    event DoughUpdated(address newDough);
 
     event Vested(address indexed beneficiary, uint time, uint value);
 
     event VestingEntryCreated(address indexed beneficiary, uint time, uint value);
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    event RewardContractAdded(address indexed rewardContract);
+
+    event RewardContractRemoved(address indexed rewardContract);
 
 }

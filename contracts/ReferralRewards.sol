@@ -62,6 +62,12 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     // 1%
     uint256 referralPercentage = 1 * 10 ** 16;
 
+    uint8 public constant decimals = 18;
+    string public constant name = "PieDAO staking contract";
+    string public constant symbol = "MINE";
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
     modifier updateReward(address account) {
         rewardPerTokenStored = rewardPerToken();
         lastUpdateTime = lastTimeRewardApplicable();
@@ -102,6 +108,7 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     function stake(uint256 amount) public updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
         super.stake(amount);
+        emit Transfer(address(0), msg.sender, amount);
         emit Staked(msg.sender, amount);
     }
 
@@ -119,6 +126,7 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         require(amount > 0, "Cannot withdraw 0");
         super.withdraw(amount);
         emit Withdrawn(msg.sender, amount);
+        emit Transfer(msg.sender, address(0), amount);
     }
 
     function exit() external {
@@ -161,6 +169,11 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         lastUpdateTime = block.timestamp;
         periodFinish = block.timestamp.add(DURATION);
         emit RewardAdded(reward);
+    }
+
+    function setEscrowPercentage(uint256 _percentage) external onlyRewardDistribution {
+        require(escrowPercentage <= 10**18, "100% escrow is the max");
+        escrowPercentage = _percentage;
     }
 
     function saveToken(address _token) external {
