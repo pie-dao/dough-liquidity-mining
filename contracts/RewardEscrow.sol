@@ -98,7 +98,7 @@ contract RewardEscrow is Ownable {
      * @notice Add a whitelisted rewards contract
      */
     function addRewardsContract(address _rewardContract) external onlyOwner {
-        isRewardContract[_rewardContract];
+        isRewardContract[_rewardContract] = true;
         emit RewardContractAdded(_rewardContract);
     }
 
@@ -106,7 +106,7 @@ contract RewardEscrow is Ownable {
      * @notice Remove a whitelisted rewards contract
     */
     function removeRewardsContract(address _rewardContract) external onlyOwner {
-        isRewardContract[_rewardContract];
+        isRewardContract[_rewardContract] = true;
         emit RewardContractRemoved(_rewardContract);
     }
 
@@ -121,6 +121,13 @@ contract RewardEscrow is Ownable {
     returns (uint)
     {
         return totalEscrowedAccountBalance[account];
+    }
+
+    /**
+     * @notice A simple alias to totalEscrowedBalance: provides ERC20 totalSupply integration.
+    */
+    function totalSupply() external view returns uint256 {
+        return totalEscrowedBalance;
     }
 
     /**
