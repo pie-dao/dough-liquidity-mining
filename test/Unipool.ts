@@ -393,5 +393,75 @@ require("chai").use(function (chai, utils) {
       expect(await pool.earned(wallet2)).to.be.bignumber.almostEqualDiv1e18(parseEther("7500"));
     });
 
-    // TODO partial escrow of rewards
+    describe("Escrow of rewards", async() => {
+      it("Setting reward escrow percentage should work", async() => {
+        await pool.setEscrowPercentage(parseEther("0.5"));
+        expect(await pool.escrowPercentage()).to.eq(parseEther("0.5"));
+      });
+      it("Setting reward escrow percentage from a non reward distribution address should fail", async() => {
+        await expect(pool.connect(signers[1]).setEscrowPercentage(parseEther("0.5"))).to.be.revertedWith("Caller is not reward distribution");
+      });
+      it("Setting reward escrow percentage above 100% should fail", async() => {
+        await expect(pool.setEscrowPercentage(parseEther("1.1"))).to.be.revertedWith("100% escrow is the max");
+      });
+
+      it("Partially escrowing rewards should work", async() => {
+        const totalRewards = parseEther("10000")
+        await pool.setEscrowPercentage(parseEther("0.5"));
+        await pool["stake(uint256)"](parseEther("100"));
+        await pool.notifyRewardAmount(totalRewards);
+        
+        await timeTraveler.increaseTime(WEEK * 10);
+        
+        const balanceBeforeExit = await snx.balanceOf(wallet1);
+        await pool.exit();
+        const balanceAfterExit = await snx.balanceOf(wallet1);
+        const escrowedBalance = await rewardEscrow.balanceOf(wallet1);
+
+        // @ts-ignore
+        expect(balanceAfterExit).to.be.bignumber.almostEqualDiv1e18(balanceBeforeExit.add(totalRewards.div(2)));
+        // @ts-ignore
+        expect(escrowedBalance).to.be.bignumber.almostEqualDiv1e18(totalRewards.div(2));
+        
+      });
+
+      it("Fully escrowing rewards should work", async() => {
+        const totalRewards = parseEther("10000")
+        await pool.setEscrowPercentage(parseEther("1"));
+        await pool["stake(uint256)"](parseEther("100"));
+        await pool.notifyRewardAmount(totalRewards);
+        
+        await timeTraveler.increaseTime(WEEK * 10);
+        
+        const balanceBeforeExit = await snx.balanceOf(wallet1);
+        await pool.exit();
+        const balanceAfterExit = await snx.balanceOf(wallet1);
+        const escrowedBalance = await rewardEscrow.balanceOf(wallet1);
+
+        // @ts-ignore
+        expect(balanceAfterExit).to.be.bignumber.almostEqualDiv1e18(balanceBeforeExit);
+        // @ts-ignore
+        expect(escrowedBalance).to.be.bignumber.almostEqualDiv1e18(totalRewards);
+      });
+
+      it("Fully not escrowing rewards should work", async() => {
+        const totalRewards = parseEther("10000")
+        await pool.setEscrowPercentage(parseEther("0"));
+        await pool["stake(uint256)"](parseEther("100"));
+        await pool.notifyRewardAmount(totalRewards);
+        
+        await timeTraveler.increaseTime(WEEK * 10);
+        
+        const balanceBeforeExit = await snx.balanceOf(wallet1);
+        await pool.exit();
+        const balanceAfterExit = await snx.balanceOf(wallet1);
+        const escrowedBalance = await rewardEscrow.balanceOf(wallet1);
+
+        // @ts-ignore
+        expect(balanceAfterExit).to.be.bignumber.almostEqualDiv1e18(balanceBeforeExit.add(totalRewards));
+        // @ts-ignore
+        expect(escrowedBalance).to.be.bignumber.almostEqualDiv1e18(constants.Zero);
+      });
+
+    });
   });

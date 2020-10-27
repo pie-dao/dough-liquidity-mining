@@ -1,6 +1,5 @@
-import { task, HardhatUserConfig } from "hardhat/config";
+import { HardhatUserConfig } from "hardhat/config";
 import "hardhat-typechain";
-
 import "@nomiclabs/hardhat-waffle";
 
 const config: HardhatUserConfig = {

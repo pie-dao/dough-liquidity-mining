@@ -14,7 +14,7 @@ import SnxMockArtifact from "../artifacts/contracts/mock/SnxMock.sol/SnxMock.jso
 import { parseEther } from "ethers/lib/utils";
 
 
-describe.only('RewardEscrow', function() {
+describe('RewardEscrow', function() {
     this.timeout(3000000);
 	const SECOND = 1000;
 	const DAY = 86400;
@@ -285,10 +285,79 @@ describe.only('RewardEscrow', function() {
         });
         
 
-        // TODO testing append vesting entries within a week
+        describe("Vesting entries", async() => {
+            it("Appending when there are no previous entries should create a new one", async() => {
+                synthetix.transfer(rewardEscrow.address, parseEther("1"));
+                await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther("1"));
 
+                const numberOfEntries = await rewardEscrow.numVestingEntries(account1);
+                const entryQuantity = await rewardEscrow.getVestingQuantity(account1, 0);
+                const vestingBalance = await rewardEscrow.balanceOf(account1);
 
-        // TODO testing add and removing vesting windows
+                expect(numberOfEntries).to.eq(1);
+                expect(entryQuantity).to.eq(parseEther("1"));
+                expect(vestingBalance).to.eq(parseEther("1"));
+                
+            });
+            it("Appending when the current entry is less than a week old should add the amount to the current one", async() => {
+                synthetix.transfer(rewardEscrow.address, parseEther("2"));
+                await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther("1"));
+
+                await timeTraveler.increaseTime(60);
+
+                await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther("1"));
+
+                const numberOfEntries = await rewardEscrow.numVestingEntries(account1);
+                const entryQuantity = await rewardEscrow.getVestingQuantity(account1, 0);
+                const vestingBalance = await rewardEscrow.balanceOf(account1);
+
+                expect(numberOfEntries).to.eq(1);
+                expect(entryQuantity).to.eq(parseEther("2"));
+                expect(vestingBalance).to.eq(parseEther("2"));
+            });
+            it("Appending when the current entry is more than a week old should create a new one", async() => {
+                synthetix.transfer(rewardEscrow.address, parseEther("2"));
+                await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther("1"));
+
+                await timeTraveler.increaseTime(WEEK + 10);
+
+                await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther("1"));
+
+                const numberOfEntries = await rewardEscrow.numVestingEntries(account1);
+                const entry1Quantity = await rewardEscrow.getVestingQuantity(account1, 0);
+                const entry2Quantity = await rewardEscrow.getVestingQuantity(account1, 1);
+                const vestingBalance = await rewardEscrow.balanceOf(account1);
+
+                expect(numberOfEntries).to.eq(2);
+                expect(entry1Quantity).to.eq(parseEther("1"));
+                expect(entry2Quantity).to.eq(parseEther("1"));
+                expect(vestingBalance).to.eq(parseEther("2"));
+            });
+        });
+
+        describe("Adding and removal of reward contracts", async() => {
+            const PLACE_HOLDER_ADDRESS = "0x0000000000000000000000000000000000000001";
+
+            it("Adding a reward contract should work", async() => {
+                await rewardEscrow.addRewardsContract(PLACE_HOLDER_ADDRESS);
+                const isRewardContract = await rewardEscrow.isRewardContract(PLACE_HOLDER_ADDRESS);
+                expect(isRewardContract).to.be.true;
+            });
+            it("Adding a reward contract from a non owner should fail", async() => {
+                await expect(rewardEscrow.connect(account1Signer).addRewardsContract(PLACE_HOLDER_ADDRESS)).to.be.revertedWith("caller is not the owner");
+            });
+            it("Removing a reward contract should work", async() => {
+                await rewardEscrow.addRewardsContract(PLACE_HOLDER_ADDRESS);
+                await rewardEscrow.removeRewardsContract(PLACE_HOLDER_ADDRESS);
+                const isRewardContract = await rewardEscrow.isRewardContract(PLACE_HOLDER_ADDRESS);
+                expect(isRewardContract).to.be.false;
+            });
+            it("Removing a reward contract from a non owner should fail", async() => {
+                await rewardEscrow.addRewardsContract(PLACE_HOLDER_ADDRESS);
+
+                await expect(rewardEscrow.connect(account1Signer).removeRewardsContract(PLACE_HOLDER_ADDRESS)).to.be.revertedWith("caller is not the owner");
+            });
+        });
 
 		describe('Stress Test', () => {
 			it('should not create more than MAX_VESTING_ENTRIES vesting entries', async () => {
@@ -368,7 +437,7 @@ describe.only('RewardEscrow', function() {
 
 				// Append the MAX_VESTING_ENTRIES to the schedule
 				for (let i = 0; i < MAX_VESTING_ENTRIES; i++) {
-					rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('1'), {gasLimit: 1000000});
+					await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('1'), {gasLimit: 1000000});
 					await timeTraveler.increaseTime(WEEK + 60);
 				}
 

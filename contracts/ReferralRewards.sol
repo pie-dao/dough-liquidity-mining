@@ -143,7 +143,12 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
                 dough.safeTransfer(address(rewardEscrow), escrowedReward);
                 rewardEscrow.appendVestingEntry(msg.sender, escrowedReward);
             }
-            dough.safeTransfer(msg.sender, reward.sub(escrowedReward));
+
+            uint256 nonEscrowedReward = reward.sub(escrowedReward);
+
+            if(nonEscrowedReward != 0) {
+                dough.safeTransfer(msg.sender, reward.sub(escrowedReward));
+            }
             emit RewardPaid(msg.sender, reward);
         }
 
@@ -173,7 +178,7 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     }
 
     function setEscrowPercentage(uint256 _percentage) external onlyRewardDistribution {
-        require(escrowPercentage <= 10**18, "100% escrow is the max");
+        require(_percentage <= 10**18, "100% escrow is the max");
         escrowPercentage = _percentage;
     }
 
