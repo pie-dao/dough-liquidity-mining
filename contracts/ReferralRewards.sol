@@ -4,6 +4,7 @@ import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "./IRewardDistributionRecipient.sol";
+import "./RewardEscrow.sol";
 
 contract LPTokenWrapper {
     using SafeMath for uint256;
@@ -47,6 +48,9 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
 
+    RewardEscrow public rewardEscrow = RewardEscrow(0x0000000000000000000000000000000000000000);
+    uint256 public escrowPercentage = 900000000000000000; //90%
+
     event RewardAdded(uint256 reward);
     event Staked(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
@@ -57,6 +61,12 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     mapping(address => address) public referralOf;
     // 1%
     uint256 referralPercentage = 1 * 10 ** 16;
+
+    uint8 public constant decimals = 18;
+    string public constant name = "PieDAO staking contract";
+    string public constant symbol = "MINE";
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
 
     modifier updateReward(address account) {
         rewardPerTokenStored = rewardPerToken();
@@ -98,6 +108,7 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     function stake(uint256 amount) public updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
         super.stake(amount);
+        emit Transfer(address(0), msg.sender, amount);
         emit Staked(msg.sender, amount);
     }
 
@@ -115,6 +126,7 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         require(amount > 0, "Cannot withdraw 0");
         super.withdraw(amount);
         emit Withdrawn(msg.sender, amount);
+        emit Transfer(msg.sender, address(0), amount);
     }
 
     function exit() external {
@@ -126,7 +138,17 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         uint256 reward = earned(msg.sender);
         if (reward > 0) {
             rewards[msg.sender] = 0;
-            dough.safeTransfer(msg.sender, reward);
+            uint256 escrowedReward = reward.mul(escrowPercentage).div(10**18);
+            if(escrowedReward != 0) {
+                dough.safeTransfer(address(rewardEscrow), escrowedReward);
+                rewardEscrow.appendVestingEntry(msg.sender, escrowedReward);
+            }
+
+            uint256 nonEscrowedReward = reward.sub(escrowedReward);
+
+            if(nonEscrowedReward != 0) {
+                dough.safeTransfer(msg.sender, reward.sub(escrowedReward));
+            }
             emit RewardPaid(msg.sender, reward);
         }
 
@@ -153,6 +175,11 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         lastUpdateTime = block.timestamp;
         periodFinish = block.timestamp.add(DURATION);
         emit RewardAdded(reward);
+    }
+
+    function setEscrowPercentage(uint256 _percentage) external onlyRewardDistribution {
+        require(_percentage <= 10**18, "100% escrow is the max");
+        escrowPercentage = _percentage;
     }
 
     function saveToken(address _token) external {
