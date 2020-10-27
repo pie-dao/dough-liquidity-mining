@@ -106,7 +106,7 @@ contract RewardEscrow is Ownable {
      * @notice Remove a whitelisted rewards contract
     */
     function removeRewardsContract(address _rewardContract) external onlyOwner {
-        isRewardContract[_rewardContract] = true;
+        isRewardContract[_rewardContract] = false;
         emit RewardContractRemoved(_rewardContract);
     }
 
@@ -126,7 +126,7 @@ contract RewardEscrow is Ownable {
     /**
      * @notice A simple alias to totalEscrowedBalance: provides ERC20 totalSupply integration.
     */
-    function totalSupply() external view returns uint256 {
+    function totalSupply() external view returns (uint256) {
         return totalEscrowedBalance;
     }
 
@@ -289,7 +289,7 @@ contract RewardEscrow is Ownable {
         // If last window is less than a week old add amount to that one.
         if(
             vestingSchedules[account].length != 0 && 
-            vestingSchedules[account][vestingSchedules[account].length - 1][0] > now - 7 days
+            vestingSchedules[account][vestingSchedules[account].length - 1][0] > time - 1 weeks
         ) {
             vestingSchedules[account][vestingSchedules[account].length - 1][1] = vestingSchedules[account][vestingSchedules[account].length - 1][1].add(quantity);
         } else {

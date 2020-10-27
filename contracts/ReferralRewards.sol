@@ -49,7 +49,7 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     mapping(address => uint256) public rewards;
 
     RewardEscrow public rewardEscrow = RewardEscrow(0x0000000000000000000000000000000000000000);
-    uint256 escrowPercentage = 900000000000000000; //90%
+    uint256 public escrowPercentage = 900000000000000000; //90%
 
     event RewardAdded(uint256 reward);
     event Staked(address indexed user, uint256 amount);
@@ -138,10 +138,11 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         uint256 reward = earned(msg.sender);
         if (reward > 0) {
             rewards[msg.sender] = 0;
-
             uint256 escrowedReward = reward.mul(escrowPercentage).div(10**18);
-            dough.safeTransfer(address(rewardEscrow), escrowedReward);
-            rewardEscrow.appendVestingEntry(msg.sender, escrowedReward);
+            if(escrowedReward != 0) {
+                dough.safeTransfer(address(rewardEscrow), escrowedReward);
+                rewardEscrow.appendVestingEntry(msg.sender, escrowedReward);
+            }
             dough.safeTransfer(msg.sender, reward.sub(escrowedReward));
             emit RewardPaid(msg.sender, reward);
         }
