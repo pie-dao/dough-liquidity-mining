@@ -7,10 +7,10 @@ import { use, expect } from "chai";
 use(solidity);
 
 import { RewardEscrow } from "../typechain/RewardEscrow";
-import { SnxMock } from "../typechain/SnxMock";
+import { DoughMock } from "../typechain/DoughMock";
 
 import RewardEscrowArtifact from "../artifacts/contracts/RewardEscrow.sol/RewardEscrow.json";
-import SnxMockArtifact from "../artifacts/contracts/mock/SnxMock.sol/SnxMock.json";
+import DoughMockArtifact from "../artifacts/contracts/mock/DoughMock.sol/DoughMock.json";
 import { parseEther } from "ethers/lib/utils";
 
 
@@ -31,7 +31,7 @@ describe('RewardEscrow', function() {
     let account2Signer: Signer;
     let signers: Signer[];
     let rewardEscrow: RewardEscrow;
-    let synthetix: SnxMock;
+    let dough: DoughMock;
     let rewardContract: string;
     let timeTraveler: TimeTraveler;
 
@@ -50,10 +50,10 @@ describe('RewardEscrow', function() {
             account2Signer
         ] = signers;
 
-        synthetix = await deployContract(signers[0], SnxMockArtifact) as SnxMock;
-        rewardEscrow = await deployContract(signers[0], RewardEscrowArtifact, [synthetix.address]) as RewardEscrow
+        dough = await deployContract(signers[0], DoughMockArtifact) as DoughMock;
+        rewardEscrow = await deployContract(signers[0], RewardEscrowArtifact, [dough.address]) as RewardEscrow
 
-        synthetix.mint(owner, parseEther("1000000"));
+        dough.mint(owner, parseEther("1000000"));
 
         timeTraveler = new TimeTraveler(network.provider);
 
@@ -65,9 +65,9 @@ describe('RewardEscrow', function() {
     });
 
 	describe('Constructor & Settings ', async () => {
-		it('should set synthetix on contructor', async () => {
-			const synthetixAddress = await rewardEscrow.dough();
-			expect(synthetixAddress).to.eq(synthetix.address);
+		it('should set dough on contructor', async () => {
+			const doughAddress = await rewardEscrow.dough();
+			expect(doughAddress).to.eq(dough.address);
 		});
 
 		it('should set owner on contructor', async () => {
@@ -107,23 +107,23 @@ describe('RewardEscrow', function() {
 
 		describe('Vesting Schedule Writes', async () => {
 			it('should not create a vesting entry with a zero amount', async () => {
-				// Transfer of SNX to the escrow must occur before creating an entry
-				await synthetix.transfer(rewardEscrow.address, parseEther("1"));
+				// Transfer of DOUGH to the escrow must occur before creating an entry
+				await dough.transfer(rewardEscrow.address, parseEther("1"));
 
 				await expect(rewardEscrow.connect(rewardContractAccount).appendVestingEntry(account1, parseEther('0'))).to.be.revertedWith("Quantity cannot be zero");
 			});
 
-			it('should not create a vesting entry if there is not enough SNX in the contracts balance', async () => {
-				// Transfer of SNX to the escrow must occur before creating an entry
-				await synthetix.transfer(rewardEscrow.address, parseEther('1'));
+			it('should not create a vesting entry if there is not enough DOUGH in the contracts balance', async () => {
+				// Transfer of DOUGH to the escrow must occur before creating an entry
+				await dough.transfer(rewardEscrow.address, parseEther('1'));
 				await expect(rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('10'))).to.be.revertedWith(" Must be enough balance in the contract to provide for the vesting entry");
 			});
 		});
 
 		describe('Vesting Schedule Reads ', async () => {
 			beforeEach(async () => {
-				// Transfer of SNX to the escrow must occur before creating a vestinng entry
-				await synthetix.transfer(rewardEscrow.address, parseEther('6000'));
+				// Transfer of DOUGH to the escrow must occur before creating a vestinng entry
+				await dough.transfer(rewardEscrow.address, parseEther('6000'));
 
 				// Add a few vesting entries as the feepool address
 				await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('1000'));
@@ -134,7 +134,7 @@ describe('RewardEscrow', function() {
 			});
 
 			it('should append a vesting entry and increase the contracts balance', async () => {
-				const balanceOfRewardEscrow = await synthetix.balanceOf(rewardEscrow.address);
+				const balanceOfRewardEscrow = await dough.balanceOf(rewardEscrow.address);
 				expect(balanceOfRewardEscrow).to.eq(parseEther('6000'));
 			});
 
@@ -178,8 +178,8 @@ describe('RewardEscrow', function() {
 
 		describe('Partial Vesting', async () => {
 			beforeEach(async () => {
-				// Transfer of SNX to the escrow must occur before creating a vestinng entry
-				await synthetix.transfer(rewardEscrow.address, parseEther('6000'));
+				// Transfer of DOUGH to the escrow must occur before creating a vestinng entry
+				await dough.transfer(rewardEscrow.address, parseEther('6000'));
 
 				// Add a few vesting entries as the feepool address
 				await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('1000'));
@@ -218,8 +218,8 @@ describe('RewardEscrow', function() {
 
 		describe('Vesting', async () => {
 			beforeEach(async () => {
-				// Transfer of SNX to the escrow must occur before creating a vestinng entry
-				await synthetix.transfer(rewardEscrow.address, parseEther('6000'));
+				// Transfer of DOUGH to the escrow must occur before creating a vestinng entry
+				await dough.transfer(rewardEscrow.address, parseEther('6000'));
 
 				// Add a few vesting entries as the feepool address
 				await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('1000'));
@@ -232,14 +232,14 @@ describe('RewardEscrow', function() {
 				await timeTraveler.increaseTime(YEAR + WEEK * 3);
 			});
 
-			it('should vest and transfer snx from contract to the user', async () => {
+			it('should vest and transfer DOUGH from contract to the user', async () => {
 				await rewardEscrow.connect(account1Signer).vest();
 
-				// Check user has all their vested SNX
-				expect(await synthetix.balanceOf(account1)).to.eq(parseEther('6000'));
+				// Check user has all their vested DOUGH
+				expect(await dough.balanceOf(account1)).to.eq(parseEther('6000'));
 
-				// Check rewardEscrow does not have any SNX
-				expect(await synthetix.balanceOf(rewardEscrow.address)).to.eq(parseEther('0'));
+				// Check rewardEscrow does not have any DOUGH
+				expect(await dough.balanceOf(rewardEscrow.address)).to.eq(parseEther('0'));
 			});
 
 			it('should vest and emit a Vest event', async () => {
@@ -287,7 +287,7 @@ describe('RewardEscrow', function() {
 
         describe("Vesting entries", async() => {
             it("Appending when there are no previous entries should create a new one", async() => {
-                synthetix.transfer(rewardEscrow.address, parseEther("1"));
+                dough.transfer(rewardEscrow.address, parseEther("1"));
                 await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther("1"));
 
                 const numberOfEntries = await rewardEscrow.numVestingEntries(account1);
@@ -300,7 +300,7 @@ describe('RewardEscrow', function() {
                 
             });
             it("Appending when the current entry is less than a week old should add the amount to the current one", async() => {
-                synthetix.transfer(rewardEscrow.address, parseEther("2"));
+                dough.transfer(rewardEscrow.address, parseEther("2"));
                 await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther("1"));
 
                 await timeTraveler.increaseTime(60);
@@ -316,7 +316,7 @@ describe('RewardEscrow', function() {
                 expect(vestingBalance).to.eq(parseEther("2"));
             });
             it("Appending when the current entry is more than a week old should create a new one", async() => {
-                synthetix.transfer(rewardEscrow.address, parseEther("2"));
+                dough.transfer(rewardEscrow.address, parseEther("2"));
                 await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther("1"));
 
                 await timeTraveler.increaseTime(WEEK + 10);
@@ -363,8 +363,8 @@ describe('RewardEscrow', function() {
 			it('should not create more than MAX_VESTING_ENTRIES vesting entries', async () => {
 				const MAX_VESTING_ENTRIES = 260; // await rewardEscrow.MAX_VESTING_ENTRIES();
 
-				// Transfer of SNX to the escrow must occur before creating an entry
-				await synthetix.transfer(rewardEscrow.address, parseEther('265'));
+				// Transfer of DOUGH to the escrow must occur before creating an entry
+				await dough.transfer(rewardEscrow.address, parseEther('265'));
 
 				// append the MAX_VESTING_ENTRIES to the schedule
 				for (let i = 0; i < MAX_VESTING_ENTRIES + 1; i++) {
@@ -376,8 +376,8 @@ describe('RewardEscrow', function() {
 			}).timeout(60e3);
 
 			it('should be able to vest 52 week * 5 years vesting entries', async () => {
-				// Transfer of SNX to the escrow must occur before creating an entry
-				await synthetix.transfer(rewardEscrow.address, parseEther('260'));
+				// Transfer of DOUGH to the escrow must occur before creating an entry
+				await dough.transfer(rewardEscrow.address, parseEther('260'));
 
 				const MAX_VESTING_ENTRIES = 260; // await rewardEscrow.MAX_VESTING_ENTRIES();
 
@@ -393,11 +393,11 @@ describe('RewardEscrow', function() {
 				// Vest
 				await rewardEscrow.connect(account1Signer).vest();
 
-				// Check user has all their vested SNX
-				expect(await synthetix.balanceOf(account1)).to.eq(parseEther('260'));
+				// Check user has all their vested DOUGH
+				expect(await dough.balanceOf(account1)).to.eq(parseEther('260'));
 
-				// Check rewardEscrow does not have any SNX
-				expect(await synthetix.balanceOf(rewardEscrow.address)).to.eq(parseEther('0'));
+				// Check rewardEscrow does not have any DOUGH
+				expect(await dough.balanceOf(rewardEscrow.address)).to.eq(parseEther('0'));
 
 				// This account should have vested its whole amount
 				expect(await rewardEscrow.totalEscrowedAccountBalance(account1)).to.eq(parseEther('0'));
@@ -407,8 +407,8 @@ describe('RewardEscrow', function() {
 			}).timeout(60e3);
 
 			it('should be able to read an accounts schedule of 5 vesting entries', async () => {
-				// Transfer of SNX to the escrow must occur before creating an entry
-				await synthetix.transfer(rewardEscrow.address, parseEther('5'));
+				// Transfer of DOUGH to the escrow must occur before creating an entry
+				await dough.transfer(rewardEscrow.address, parseEther('5'));
 
 				const VESTING_ENTRIES = 5;
 
@@ -430,8 +430,8 @@ describe('RewardEscrow', function() {
 			}).timeout(60e3);
 
 			it('should be able to read the full account schedule 52 week * 5 years vesting entries', async () => {
-				// Transfer of SNX to the escrow must occur before creating an entry
-				await synthetix.transfer(rewardEscrow.address, parseEther('260'));
+				// Transfer of DOUGH to the escrow must occur before creating an entry
+				await dough.transfer(rewardEscrow.address, parseEther('260'));
 
 				const MAX_VESTING_ENTRIES = 260; // await rewardEscrow.MAX_VESTING_ENTRIES();
 

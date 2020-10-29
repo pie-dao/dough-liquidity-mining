@@ -6,9 +6,9 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 
 /**
- * @title SynthetixEscrow interface
+ * @title DoughEscrow interface
  */
-interface ISynthetixEscrow {
+interface IDoughEscrow {
     function balanceOf(address account) external view returns (uint);
     function appendVestingEntry(address account, uint quantity) external;
 }
@@ -28,8 +28,8 @@ date:       2019-03-01
 -----------------------------------------------------------------
 MODULE DESCRIPTION
 -----------------------------------------------------------------
-Escrows the SNX rewards from the inflationary supply awarded to
-users for staking their SNX and maintaining the c-rationn target.
+Escrows the DOUGH rewards from the inflationary supply awarded to
+users for staking their DOUGH and maintaining the c-rationn target.
 
 SNW rewards are escrowed for 1 year from the claim date and users
 can call vest in 12 months time.
@@ -38,7 +38,7 @@ can call vest in 12 months time.
 
 
 /**
- * @title A contract to hold escrowed SNX and free them at given schedules.
+ * @title A contract to hold escrowed DOUGH and free them at given schedules.
  */
 contract RewardEscrow is Ownable {
     using SafeMath for uint;
@@ -49,16 +49,16 @@ contract RewardEscrow is Ownable {
     mapping(address => bool) public isRewardContract;
 
     /* Lists of (timestamp, quantity) pairs per account, sorted in ascending time order.
-     * These are the times at which each given quantity of SNX vests. */
+     * These are the times at which each given quantity of DOUGH vests. */
     mapping(address => uint[2][]) public vestingSchedules;
 
-    /* An account's total escrowed synthetix balance to save recomputing this for fee extraction purposes. */
+    /* An account's total escrowed dough balance to save recomputing this for fee extraction purposes. */
     mapping(address => uint) public totalEscrowedAccountBalance;
 
-    /* An account's total vested reward synthetix. */
+    /* An account's total vested reward dough. */
     mapping(address => uint) public totalVestedAccountBalance;
 
-    /* The total remaining escrowed balance, for verifying the actual synthetix balance of this contract against. */
+    /* The total remaining escrowed balance, for verifying the actual dough balance of this contract against. */
     uint public totalEscrowedBalance;
 
     uint constant TIME_INDEX = 0;
@@ -84,7 +84,7 @@ contract RewardEscrow is Ownable {
     /* ========== SETTERS ========== */
 
     /**
-     * @notice set the synthetix contract address as we need to transfer SNX when the user vests
+     * @notice set the dough contract address as we need to transfer DOUGH when the user vests
      */
     function setDough(address _dough)
     external
@@ -143,7 +143,7 @@ contract RewardEscrow is Ownable {
 
     /**
      * @notice Get a particular schedule entry for an account.
-     * @return A pair of uints: (timestamp, synthetix quantity).
+     * @return A pair of uints: (timestamp, dough quantity).
      */
     function getVestingScheduleEntry(address account, uint index)
     public
@@ -165,7 +165,7 @@ contract RewardEscrow is Ownable {
     }
 
     /**
-     * @notice Get the quantity of SNX associated with a given schedule entry.
+     * @notice Get the quantity of DOUGH associated with a given schedule entry.
      */
     function getVestingQuantity(address account, uint index)
     public
@@ -194,7 +194,7 @@ contract RewardEscrow is Ownable {
 
     /**
      * @notice Obtain the next schedule entry that will vest for a given user.
-     * @return A pair of uints: (timestamp, synthetix quantity). */
+     * @return A pair of uints: (timestamp, DOUGH quantity). */
     function getNextVestingEntry(address account)
     public
     view
@@ -252,12 +252,12 @@ contract RewardEscrow is Ownable {
 
     /**
      * @notice Add a new vesting entry at a given time and quantity to an account's schedule.
-     * @dev A call to this should accompany a previous successfull call to synthetix.transfer(tewardEscrow, amount),
+     * @dev A call to this should accompany a previous successfull call to dough.transfer(rewardEscrow, amount),
      * to ensure that when the funds are withdrawn, there is enough balance.
      * Note; although this function could technically be used to produce unbounded
      * arrays, it's only withinn the 4 year period of the weekly inflation schedule.
      * @param account The account to append a new vesting entry to.
-     * @param quantity The quantity of SNX that will be escrowed.
+     * @param quantity The quantity of DOUGH that will be escrowed.
      */
     function appendVestingEntry(address account, uint quantity)
     public
@@ -280,7 +280,7 @@ contract RewardEscrow is Ownable {
         if (scheduleLength == 0) {
             totalEscrowedAccountBalance[account] = quantity;
         } else {
-            /* Disallow adding new vested SNX earlier than the last one.
+            /* Disallow adding new vested DOUGH earlier than the last one.
              * Since entries are only appended, this means that no vesting date can be repeated. */
             require(getVestingTime(account, numVestingEntries(account) - 1) < time, "Cannot add new vested entries earlier than the last one");
             totalEscrowedAccountBalance[account] = totalEscrowedAccountBalance[account].add(quantity);
@@ -301,7 +301,7 @@ contract RewardEscrow is Ownable {
     }
 
     /**
-     * @notice Allow a user to withdraw any SNX in their schedule that have vested.
+     * @notice Allow a user to withdraw any DOUGH in their schedule that have vested.
      */
     function vest()
     external

@@ -9,12 +9,12 @@ import TimeTraveler from "../utils/TimeTraveler";
 use(solidity);
 
 import uniArtifact from "../artifacts/contracts/mock/UniMock.sol/UniMock.json";
-import SnxArtifact from "../artifacts/contracts/mock/SnxMock.sol/SnxMock.json";
+import DOUGHArtifact from "../artifacts/contracts/mock/DoughMock.sol/DoughMock.json";
 import ReferralMockArtifact from "../artifacts/contracts/mock/ReferralMock.sol/ReferralMock.json";
 import RewardEscrowArtifact from "../artifacts/contracts/RewardEscrow.sol/RewardEscrow.json";
 
 import { UniMock } from "../typechain/UniMock";
-import { SnxMock } from "../typechain/SnxMock";
+import { DoughMock } from "../typechain/DoughMock";
 import { ReferralMock } from "../typechain/ReferralMock";
 import { RewardEscrow } from "../typechain/RewardEscrow";
 import { parseEther } from "ethers/lib/utils";
@@ -62,7 +62,7 @@ require("chai").use(function (chai, utils) {
     this.timeout(3000000);
 
     let uni: UniMock;
-    let snx: SnxMock;
+    let DOUGH: DoughMock;
     let rewardEscrow: RewardEscrow;
     let pool: ReferralMock;
     let signers:Signer[] = [];
@@ -77,10 +77,10 @@ require("chai").use(function (chai, utils) {
     before(async() => {
       signers = await ethers.getSigners();
       uni = (await deployContract(signers[0], uniArtifact)) as UniMock;
-      snx = (await deployContract(signers[0], SnxArtifact)) as SnxMock;
-      rewardEscrow = (await deployContract(signers[0], RewardEscrowArtifact, [snx.address])) as RewardEscrow;
+      DOUGH = (await deployContract(signers[0], DOUGHArtifact)) as DoughMock;
+      rewardEscrow = (await deployContract(signers[0], RewardEscrowArtifact, [DOUGH.address])) as RewardEscrow;
 
-      pool = (await deployContract(signers[0], ReferralMockArtifact, [uni.address, snx.address, rewardEscrow.address])) as ReferralMock;
+      pool = (await deployContract(signers[0], ReferralMockArtifact, [uni.address, DOUGH.address, rewardEscrow.address])) as ReferralMock;
       await rewardEscrow.addRewardsContract(pool.address);
 
       wallet1 = await signers[0].getAddress();
@@ -92,7 +92,7 @@ require("chai").use(function (chai, utils) {
       //Set escrow percentage to 0
       pool.setEscrowPercentage(0);
 
-      await snx.mint(pool.address, parseEther("1000000"));
+      await DOUGH.mint(pool.address, parseEther("1000000"));
       await uni.mint(wallet1, parseEther("1000"));
       await uni.mint(wallet2, parseEther("1000"));
       await uni.mint(wallet3, parseEther("1000"));
@@ -113,7 +113,7 @@ require("chai").use(function (chai, utils) {
     });
 
     it("Two stakers with the same stakes wait 1 w", async function () {
-      // 72000 SNX per week for 3 weeks
+      // 72000 DOUGH per week for 3 weeks
       await pool.notifyRewardAmount(parseEther("72000"))
 
       // @ts-ignore
@@ -142,7 +142,7 @@ require("chai").use(function (chai, utils) {
     });
 
     it("Two stakers with the different (1:3) stakes wait 1 w", async function () {
-      // 72000 SNX per week
+      // 72000 DOUGH per week
       await pool.notifyRewardAmount(parseEther("72000"));
 
       // @ts-ignore
@@ -178,7 +178,7 @@ require("chai").use(function (chai, utils) {
       // 3x:         +--------+ =  0k for 1w + 54k for 2w
       //
 
-      // 72000 SNX per week
+      // 72000 DOUGH per week
       await pool.notifyRewardAmount(parseEther("72000"));
 
       await pool["stake(uint256)"](parseEther("1"));
@@ -215,7 +215,7 @@ require("chai").use(function (chai, utils) {
       // 5x:         +-----------------+ =  0k for 1w + 40k for 2w + 60k for 3w
       //
 
-      // 72000 SNX per week for 3 weeks
+      // 72000 DOUGH per week for 3 weeks
       await pool.notifyRewardAmount(parseEther("72000"));
 
       await pool["stake(uint256)"](parseEther("1"));
@@ -261,7 +261,7 @@ require("chai").use(function (chai, utils) {
     });
 
     it("One staker on 2 durations with gap", async function () {
-      // 72000 SNX per week for 1 weeks
+      // 72000 DOUGH per week for 1 weeks
       await pool.notifyRewardAmount(parseEther("72000"));
 
       await pool["stake(uint256)"](parseEther("1"));
@@ -273,7 +273,7 @@ require("chai").use(function (chai, utils) {
       // @ts-ignore
       expect(await pool.earned(wallet1)).to.be.bignumber.almostEqualDiv1e18(parseEther("72000"));
 
-      // 72000 SNX per week for 1 weeks
+      // 72000 DOUGH per week for 1 weeks
       await pool.notifyRewardAmount(parseEther("72000"));
 
       await timeTraveler.increaseTime(WEEK * 3);
@@ -295,7 +295,7 @@ require("chai").use(function (chai, utils) {
     });
 
     it("One staker on 2 durations with gap, with referral", async function () {
-      // 72000 SNX per week for 1 weeks
+      // 72000 DOUGH per week for 1 weeks
       await pool.notifyRewardAmount(parseEther("72000"));
 
       const tx = await (await pool["stake(uint256,address)"](parseEther("1"),wallet4)).wait();
@@ -312,7 +312,7 @@ require("chai").use(function (chai, utils) {
       // @ts-ignore
       expect(await pool.earned(wallet1)).to.be.bignumber.almostEqualDiv1e18(parseEther("72000"));
 
-      // 72000 SNX per week for 1 weeks
+      // 72000 DOUGH per week for 1 weeks
       await pool.notifyRewardAmount(parseEther("72000"));
 
       await timeTraveler.increaseTime(WEEK * 3);
@@ -363,7 +363,7 @@ require("chai").use(function (chai, utils) {
     });
 
     it("Notify Reward Amount from mocked distribution to 10,000", async function () {
-      // 10000 SNX per week for 1 weeks
+      // 10000 DOUGH per week for 1 weeks
       await pool.notifyRewardAmount(parseEther("10000"));
 
       // @ts-ignore
@@ -413,9 +413,9 @@ require("chai").use(function (chai, utils) {
         
         await timeTraveler.increaseTime(WEEK * 10);
         
-        const balanceBeforeExit = await snx.balanceOf(wallet1);
+        const balanceBeforeExit = await DOUGH.balanceOf(wallet1);
         await pool.exit();
-        const balanceAfterExit = await snx.balanceOf(wallet1);
+        const balanceAfterExit = await DOUGH.balanceOf(wallet1);
         const escrowedBalance = await rewardEscrow.balanceOf(wallet1);
 
         // @ts-ignore
@@ -433,9 +433,9 @@ require("chai").use(function (chai, utils) {
         
         await timeTraveler.increaseTime(WEEK * 10);
         
-        const balanceBeforeExit = await snx.balanceOf(wallet1);
+        const balanceBeforeExit = await DOUGH.balanceOf(wallet1);
         await pool.exit();
-        const balanceAfterExit = await snx.balanceOf(wallet1);
+        const balanceAfterExit = await DOUGH.balanceOf(wallet1);
         const escrowedBalance = await rewardEscrow.balanceOf(wallet1);
 
         // @ts-ignore
@@ -452,9 +452,9 @@ require("chai").use(function (chai, utils) {
         
         await timeTraveler.increaseTime(WEEK * 10);
         
-        const balanceBeforeExit = await snx.balanceOf(wallet1);
+        const balanceBeforeExit = await DOUGH.balanceOf(wallet1);
         await pool.exit();
-        const balanceAfterExit = await snx.balanceOf(wallet1);
+        const balanceAfterExit = await DOUGH.balanceOf(wallet1);
         const escrowedBalance = await rewardEscrow.balanceOf(wallet1);
 
         // @ts-ignore
