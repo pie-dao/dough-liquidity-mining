@@ -58,7 +58,7 @@ require("chai").use(function (chai, utils) {
 });
 
 
-  describe.only("Unipool", async function () {
+  describe("Unipool", async function () {
     this.timeout(3000000);
 
     let uni: UniMock;
