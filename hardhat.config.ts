@@ -17,6 +17,12 @@ const config: HardhatUserConfig = {
   networks: {
     goerli: {
       url: `https://goerli.infura.io/v3/${process.env.INFURA_PROJECT_ID}`
+    },
+    mainnet: {
+      url: `https://mainnet.infura.io/v3/${process.env.INFURA_PROJECT_ID}`
+    },
+    frame: {
+      url: "http://localhost:1248"
     }
   },
   etherscan: {
