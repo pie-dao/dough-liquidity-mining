@@ -51,7 +51,9 @@ describe('RewardEscrow', function() {
         ] = signers;
 
         dough = await deployContract(signers[0], DoughMockArtifact) as DoughMock;
-        rewardEscrow = await deployContract(signers[0], RewardEscrowArtifact, [dough.address]) as RewardEscrow
+		rewardEscrow = await deployContract(signers[0], RewardEscrowArtifact) as RewardEscrow
+		
+		rewardEscrow["initialize(address,string,string)"](dough.address, "TEST", "TEST");
 
         dough.mint(owner, parseEther("1000000"));
 

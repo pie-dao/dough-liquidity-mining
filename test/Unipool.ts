@@ -58,11 +58,11 @@ require("chai").use(function (chai, utils) {
 });
 
 
-  describe("Unipool", async function () {
+  describe.only("Unipool", async function () {
     this.timeout(3000000);
 
     let uni: UniMock;
-    let DOUGH: DoughMock;
+    let dough: DoughMock;
     let rewardEscrow: RewardEscrow;
     let pool: ReferralMock;
     let signers:Signer[] = [];
@@ -77,10 +77,15 @@ require("chai").use(function (chai, utils) {
     before(async() => {
       signers = await ethers.getSigners();
       uni = (await deployContract(signers[0], uniArtifact)) as UniMock;
-      DOUGH = (await deployContract(signers[0], DOUGHArtifact)) as DoughMock;
-      rewardEscrow = (await deployContract(signers[0], RewardEscrowArtifact, [DOUGH.address])) as RewardEscrow;
+      dough = (await deployContract(signers[0], DOUGHArtifact)) as DoughMock;
+      rewardEscrow = (await deployContract(signers[0], RewardEscrowArtifact)) as RewardEscrow;
 
-      pool = (await deployContract(signers[0], ReferralMockArtifact, [uni.address, DOUGH.address, rewardEscrow.address])) as ReferralMock;
+      rewardEscrow["initialize(address,string,string)"](dough.address, "TEST", "TEST");
+
+      pool = (await deployContract(signers[0], ReferralMockArtifact, [uni.address, dough.address, rewardEscrow.address])) as ReferralMock;
+
+      pool["initialize()"]();
+
       await rewardEscrow.addRewardsContract(pool.address);
 
       wallet1 = await signers[0].getAddress();
@@ -92,7 +97,7 @@ require("chai").use(function (chai, utils) {
       //Set escrow percentage to 0
       pool.setEscrowPercentage(0);
 
-      await DOUGH.mint(pool.address, parseEther("1000000"));
+      await dough.mint(pool.address, parseEther("1000000"));
       await uni.mint(wallet1, parseEther("1000"));
       await uni.mint(wallet2, parseEther("1000"));
       await uni.mint(wallet3, parseEther("1000"));
@@ -413,9 +418,9 @@ require("chai").use(function (chai, utils) {
         
         await timeTraveler.increaseTime(WEEK * 10);
         
-        const balanceBeforeExit = await DOUGH.balanceOf(wallet1);
+        const balanceBeforeExit = await dough.balanceOf(wallet1);
         await pool.exit();
-        const balanceAfterExit = await DOUGH.balanceOf(wallet1);
+        const balanceAfterExit = await dough.balanceOf(wallet1);
         const escrowedBalance = await rewardEscrow.balanceOf(wallet1);
 
         // @ts-ignore
@@ -433,9 +438,9 @@ require("chai").use(function (chai, utils) {
         
         await timeTraveler.increaseTime(WEEK * 10);
         
-        const balanceBeforeExit = await DOUGH.balanceOf(wallet1);
+        const balanceBeforeExit = await dough.balanceOf(wallet1);
         await pool.exit();
-        const balanceAfterExit = await DOUGH.balanceOf(wallet1);
+        const balanceAfterExit = await dough.balanceOf(wallet1);
         const escrowedBalance = await rewardEscrow.balanceOf(wallet1);
 
         // @ts-ignore
@@ -452,9 +457,9 @@ require("chai").use(function (chai, utils) {
         
         await timeTraveler.increaseTime(WEEK * 10);
         
-        const balanceBeforeExit = await DOUGH.balanceOf(wallet1);
+        const balanceBeforeExit = await dough.balanceOf(wallet1);
         await pool.exit();
-        const balanceAfterExit = await DOUGH.balanceOf(wallet1);
+        const balanceAfterExit = await dough.balanceOf(wallet1);
         const escrowedBalance = await rewardEscrow.balanceOf(wallet1);
 
         // @ts-ignore

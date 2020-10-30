@@ -1,8 +1,8 @@
 pragma solidity ^0.5.0;
 
-import "@openzeppelin/contracts/math/Math.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/math/Math.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/token/ERC20/SafeERC20.sol";
 import "./IRewardDistributionRecipient.sol";
 import "./RewardEscrow.sol";
 
@@ -76,6 +76,10 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
             userRewardPerTokenPaid[account] = rewardPerTokenStored;
         }
         _;
+    }
+
+    function initialize() public initializer {
+        Ownable.initialize(msg.sender);
     }
 
     function lastTimeRewardApplicable() public view returns (uint256) {
