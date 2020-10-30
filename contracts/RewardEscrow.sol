@@ -1,8 +1,9 @@
-pragma solidity ^0.5.12;
+pragma solidity 0.5.12;
 
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/ownership/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/upgrades/contracts/Initializable.sol";
 
 
 /**
@@ -69,15 +70,18 @@ contract RewardEscrow is Ownable {
     uint constant public MAX_VESTING_ENTRIES = 52*5;
 
     uint8 public constant decimals = 18;
-    string public constant name = "Escrowed DOUGH";
-    string public constant symbol = "eDOUGH";
+    string public name;
+    string public symbol;
 
 
-    /* ========== CONSTRUCTOR ========== */
+    /* ========== Initializer ========== */
 
-    constructor(address _dough) Ownable() public
+    function initialize (address _dough, string memory _name, string memory _symbol) public initializer
     {
         dough = IERC20(_dough);
+        name = _name;
+        symbol = _symbol;
+        Ownable.initialize(msg.sender);
     }
 
 
