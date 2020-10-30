@@ -15,6 +15,7 @@
       "node_modules/@nomiclabs/hardhat-ethers/src/type-extensions.ts",
       "node_modules/@nomiclabs/hardhat-etherscan/src/type-extensions.ts",
       "node_modules/@nomiclabs/hardhat-waffle/src/type-extensions.ts",
-      "node_modules/buidler-typechain/src/type-extensions.ts"
+      "node_modules/@nomiclabs/hardhat-etherscan/src/type-extentions.ts",
+      "node_modules/buidler-typechain/src/type-extensions.d.ts"
     ]
   }

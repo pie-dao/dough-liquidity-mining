@@ -11,7 +11,7 @@ contract LPTokenWrapper {
     using SafeERC20 for IERC20;
 
     // TODO setup pool for DeFi+S
-    IERC20 public uni = IERC20(0x35333CF3Db8e334384EC6D2ea446DA6e445701dF);
+    IERC20 public uni;
 
     uint256 private _totalSupply;
     mapping(address => uint256) private _balances;
@@ -38,7 +38,7 @@ contract LPTokenWrapper {
 }
 
 contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
-    IERC20 public dough = IERC20(0xaD6A626aE2B43DCb1B39430Ce496d2FA0365BA9C);
+    IERC20 public dough;
     uint256 public constant DURATION = 7 days;
 
     uint256 public periodFinish = 0;
@@ -48,8 +48,16 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
 
-    RewardEscrow public rewardEscrow = RewardEscrow(0x0000000000000000000000000000000000000000);
-    uint256 public escrowPercentage = 900000000000000000; //90%
+    RewardEscrow public rewardEscrow;
+    uint256 public escrowPercentage;
+
+    mapping(address => address) public referralOf;
+    // 1%
+    uint256 referralPercentage = 1 * 10 ** 16;
+
+    uint8 public constant decimals = 18;
+    string public name = "PieDAO staking contract DOUGH/ETH";
+    string public symbol = "PieDAO DOUGH/ETH Staking";
 
     event RewardAdded(uint256 reward);
     event Staked(address indexed user, uint256 amount);
@@ -57,15 +65,6 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     event RewardPaid(address indexed user, uint256 reward);
     event ReferralSet(address indexed user, address indexed referral);
     event ReferralReward(address indexed user, address indexed referral, uint256 amount);
-
-    mapping(address => address) public referralOf;
-    // 1%
-    uint256 referralPercentage = 1 * 10 ** 16;
-
-    uint8 public constant decimals = 18;
-    string public constant name = "PieDAO staking contract";
-    string public constant symbol = "MINE";
-
     event Transfer(address indexed from, address indexed to, uint256 value);
 
     modifier updateReward(address account) {
@@ -78,8 +77,19 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         _;
     }
 
-    function initialize() public initializer {
+    function initialize(
+        address _dough,
+        address _uni,
+        address _rewardEscrow,
+        string memory _name, 
+        string memory _symbol
+    ) public initializer {
         Ownable.initialize(msg.sender);
+        dough = IERC20(_dough);
+        uni = IERC20 (_uni);
+        rewardEscrow = RewardEscrow(_rewardEscrow);
+        name = _name;
+        symbol = _symbol;
     }
 
     function lastTimeRewardApplicable() public view returns (uint256) {

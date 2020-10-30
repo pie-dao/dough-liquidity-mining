@@ -10,12 +10,12 @@ use(solidity);
 
 import uniArtifact from "../artifacts/contracts/mock/UniMock.sol/UniMock.json";
 import DOUGHArtifact from "../artifacts/contracts/mock/DoughMock.sol/DoughMock.json";
-import ReferralMockArtifact from "../artifacts/contracts/mock/ReferralMock.sol/ReferralMock.json";
+import ReferralRewardsArtifact from "../artifacts/contracts/ReferralRewards.sol/ReferralRewards.json";
 import RewardEscrowArtifact from "../artifacts/contracts/RewardEscrow.sol/RewardEscrow.json";
 
 import { UniMock } from "../typechain/UniMock";
 import { DoughMock } from "../typechain/DoughMock";
-import { ReferralMock } from "../typechain/ReferralMock";
+import { ReferralRewards } from "../typechain/ReferralRewards";
 import { RewardEscrow } from "../typechain/RewardEscrow";
 import { parseEther } from "ethers/lib/utils";
 
@@ -64,7 +64,7 @@ require("chai").use(function (chai, utils) {
     let uni: UniMock;
     let dough: DoughMock;
     let rewardEscrow: RewardEscrow;
-    let pool: ReferralMock;
+    let pool: ReferralRewards;
     let signers:Signer[] = [];
     let timeTraveler: TimeTraveler;
     let wallet1;
@@ -82,9 +82,15 @@ require("chai").use(function (chai, utils) {
 
       rewardEscrow["initialize(address,string,string)"](dough.address, "TEST", "TEST");
 
-      pool = (await deployContract(signers[0], ReferralMockArtifact, [uni.address, dough.address, rewardEscrow.address])) as ReferralMock;
+      pool = (await deployContract(signers[0], ReferralRewardsArtifact)) as ReferralRewards;
 
-      pool["initialize()"]();
+      pool["initialize(address,address,address,string,string)"](
+        dough.address,
+        uni.address,
+        rewardEscrow.address,
+        "TEST",
+        "TEST"
+      );
 
       await rewardEscrow.addRewardsContract(pool.address);
 
