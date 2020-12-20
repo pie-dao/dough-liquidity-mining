@@ -30,6 +30,12 @@ contract LPTokenWrapper {
         uni.safeTransferFrom(msg.sender, address(this), amount);
     }
 
+    function stakeFor(uint256 amount, address beneficiary) public {
+        _totalSupply = _totalSupply.add(amount);
+        _balances[beneficiary] = _balances[beneficiary].add(amount);
+        uni.safeTransferFrom(msg.sender, address(this), amount);
+    }
+
     function withdraw(uint256 amount) public {
         _totalSupply = _totalSupply.sub(amount);
         _balances[msg.sender] = _balances[msg.sender].sub(amount);
@@ -122,6 +128,13 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
     function stake(uint256 amount) public updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
         super.stake(amount);
+        emit Transfer(address(0), msg.sender, amount);
+        emit Staked(msg.sender, amount);
+    }
+
+    function stakeFor(uint256 amount, address beneficiary) public updateReward(beneficiary) {
+        require(amount > 0, "Cannot stake 0");
+        super.stakeFor(amount, beneficiary);
         emit Transfer(address(0), msg.sender, amount);
         emit Staked(msg.sender, amount);
     }
