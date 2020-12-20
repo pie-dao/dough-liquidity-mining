@@ -136,7 +136,7 @@ contract ReferralRewards is LPTokenWrapper, IRewardDistributionRecipient {
         require(amount > 0, "Cannot stake 0");
         super.stakeFor(amount, beneficiary);
         emit Transfer(address(0), msg.sender, amount);
-        emit Staked(msg.sender, amount);
+        emit Staked(beneficiary, amount);
     }
 
     function stake(uint256 amount, address referral) public {
