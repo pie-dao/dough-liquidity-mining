@@ -7,13 +7,26 @@ import "@nomiclabs/hardhat-etherscan";
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.5.12",
-    settings: {
-      optimizer: {
-        enabled: false,
-        runs: 200
+    compilers: [
+      {
+        version: "0.5.12",
+        settings: {
+          optimizer: {
+            enabled: false,
+            runs: 200
+          }
+        }
+      },
+      {
+        version: "0.6.12",
+        settings: {
+          optimizer: {
+            enabled: false,
+            runs: 200
+          }
+        }
       }
-    }
+    ]
   },
   networks: {
     goerli: {
