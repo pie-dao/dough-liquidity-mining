@@ -2,6 +2,7 @@ require("dotenv").config();
 import { HardhatUserConfig } from "hardhat/config";
 import "hardhat-typechain";
 import "@nomiclabs/hardhat-waffle";
+import "@nomiclabs/hardhat-ethers";
 import "@nomiclabs/hardhat-etherscan";
 
 const config: HardhatUserConfig = {
@@ -29,6 +30,8 @@ const config: HardhatUserConfig = {
     apiKey: process.env.ETHERSCAN_KEY
   }
 };
+
+
 
 
 export default config;
