@@ -32,6 +32,7 @@ library Pool {
     uint256 rewardWeight;
     FixedPointMath.uq192x64 accumulatedRewardWeight;
     uint256 lastUpdatedBlock;
+    uint256 escrowPercentage;
   }
 
   struct List {

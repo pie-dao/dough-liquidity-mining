@@ -14,7 +14,8 @@
   "dependencies": {
     "@openzeppelin/contracts": "^3.4.1",
     "@openzeppelin/contracts-ethereum-package": "^2.5.0",
-    "@openzeppelin/upgrades": "^2.8.0"
+    "@openzeppelin/upgrades": "^2.8.0",
+    "chai-subset": "^1.6.0"
   },
   "devDependencies": {
     "@ethereum-waffle/chai": "^3.1.0",

@@ -14,6 +14,8 @@ import {FixedPointMath} from "./libraries/FixedPointMath.sol";
 import {Pool} from "./libraries/pools/Pool.sol";
 import {Stake} from "./libraries/pools/Stake.sol";
 
+import {IRewardEscrow} from "./interfaces/IRewardEscrow.sol";
+
 import "hardhat/console.sol";
 
 /// @title StakingPools
@@ -58,6 +60,11 @@ contract StakingPools is ReentrancyGuard {
     uint256 rewardWeight
   );
 
+  event PoolEscrowPercentageUpdated(
+    uint256 indexed poolId,
+    uint256 escrowPercentage
+  );
+
   event PoolCreated(
     uint256 indexed poolId,
     IERC20 indexed token
@@ -87,6 +94,9 @@ contract StakingPools is ReentrancyGuard {
   /// @dev The Address where the tokens will be withdrawed from.
   address public rewardSource;
 
+  /// @dev Reward Escrow contract
+  IRewardEscrow rewardEscrow;
+
   /// @dev The address of the account which currently has administrative capabilities over this contract.
   address public governance;
 
@@ -108,12 +118,14 @@ contract StakingPools is ReentrancyGuard {
   constructor(
     IERC20 _reward,
     address _rewardSource,
+    IRewardEscrow _rewardEscrow,
     address _governance
   ) public {
     require(_governance != address(0), "StakingPools: governance address cannot be 0x0");
 
     reward = _reward;
     rewardSource = _rewardSource;
+    rewardEscrow = _rewardEscrow;
     governance = _governance;
   }
 
@@ -174,7 +186,8 @@ contract StakingPools is ReentrancyGuard {
       totalDeposited: 0,
       rewardWeight: 0,
       accumulatedRewardWeight: FixedPointMath.uq192x64(0),
-      lastUpdatedBlock: block.number
+      lastUpdatedBlock: block.number,
+      escrowPercentage: 0
     }));
 
     tokenPoolIds[_token] = _poolId + 1;
@@ -209,6 +222,29 @@ contract StakingPools is ReentrancyGuard {
     }
 
     _ctx.totalRewardWeight = _totalRewardWeight;
+  }
+
+  /// @dev Sets the escrow percentages of all the pools
+  ///
+  /// @param _escrowPercentages Escrow percentages 1e18 == 100%
+  function setEscrowPercentages(uint256[] calldata _escrowPercentages) external onlyGovernance {
+      require(_escrowPercentages.length == _pools.length(), "StakingPools: _escrowPercentages length mismatch");
+
+      _updatePools();
+
+      for(uint256 _poolId = 0; _poolId < _pools.length(); _poolId++) {
+        Pool.Data storage _pool =  _pools.get(_poolId);
+
+        require(_escrowPercentages[_poolId] <= 1 ether, "StakingPools: escrow percentage should be 100% max");
+
+        uint256 _currentEscrowPercentage = _pool.escrowPercentage;
+        if(_currentEscrowPercentage == _escrowPercentages[_poolId]) {
+            continue;
+        }
+
+        _pool.escrowPercentage = _escrowPercentages[_poolId];
+        emit PoolEscrowPercentageUpdated(_poolId, _escrowPercentages[_poolId]);
+      }
   }
 
   /// @dev Stakes tokens into a pool.
@@ -405,11 +441,20 @@ contract StakingPools is ReentrancyGuard {
   /// @notice use this function to claim the tokens from a corresponding pool by ID.
   function _claim(uint256 _poolId) internal {
     Stake.Data storage _stake = _stakes[msg.sender][_poolId];
+    Pool.Data storage _pool = _pools.get(_poolId);
 
     uint256 _claimAmount = _stake.totalUnclaimed;
     _stake.totalUnclaimed = 0;
 
-    reward.safeTransferFrom(rewardSource, msg.sender, _claimAmount);
+    uint256 _escrowedAmount = _claimAmount.mul(_pool.escrowPercentage).div(1e18);
+
+    if(_escrowedAmount != 0) {
+        // escrow
+        reward.safeTransferFrom(rewardSource, address(rewardEscrow), _escrowedAmount);
+        rewardEscrow.appendVestingEntry(msg.sender, _escrowedAmount);
+    }
+
+    reward.safeTransferFrom(rewardSource, msg.sender, _claimAmount.sub(_escrowedAmount));
 
     emit TokensClaimed(msg.sender, _poolId, _claimAmount);
   }
