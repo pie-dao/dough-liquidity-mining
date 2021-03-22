@@ -55,6 +55,11 @@ contract StakingPools is ReentrancyGuard {
     uint256 rewardRate
   );
 
+  event PoolExitFeePercentageUpdated(
+    uint256 indexed poolId,
+    uint256 exitFeePercentage
+  );
+
   event PoolRewardWeightUpdated(
     uint256 indexed poolId,
     uint256 rewardWeight
@@ -91,6 +96,9 @@ contract StakingPools is ReentrancyGuard {
   /// @dev The token which will be minted as a reward for staking.
   IERC20 public reward;
 
+  /// @dev The address receiving the exit fees
+  address public exitFeeReceiver;
+
   /// @dev The Address where the tokens will be withdrawed from.
   address public rewardSource;
 
@@ -118,6 +126,7 @@ contract StakingPools is ReentrancyGuard {
   function initialize(
     IERC20 _reward,
     address _rewardSource,
+    address _exitFeeReceiver,
     IRewardEscrow _rewardEscrow,
     address _governance
   ) public {
@@ -128,6 +137,7 @@ contract StakingPools is ReentrancyGuard {
     rewardSource = _rewardSource;
     rewardEscrow = _rewardEscrow;
     governance = _governance;
+    exitFeeReceiver = _exitFeeReceiver;
   }
 
   /// @dev A modifier which reverts when the caller is not the governance.
@@ -188,7 +198,8 @@ contract StakingPools is ReentrancyGuard {
       rewardWeight: 0,
       accumulatedRewardWeight: FixedPointMath.uq192x64(0),
       lastUpdatedBlock: block.number,
-      escrowPercentage: 0
+      escrowPercentage: 0,
+      exitFeePercentage: 0
     }));
 
     tokenPoolIds[_token] = _poolId + 1;
@@ -246,6 +257,36 @@ contract StakingPools is ReentrancyGuard {
         _pool.escrowPercentage = _escrowPercentages[_poolId];
         emit PoolEscrowPercentageUpdated(_poolId, _escrowPercentages[_poolId]);
       }
+  }
+
+  /// @dev Sets the exit fees of all the pools
+  ///
+  /// @param _exitFeePercentages Exit fee percentages. 10% == 1e17
+  function setExitFeePercentages(uint256[] calldata _exitFeePercentages) external onlyGovernance {
+      require(_exitFeePercentages.length == _pools.length(), "StakingPools: _exitFeePercentages length mismatch");
+
+      _updatePools();
+
+      for(uint256 _poolId = 0; _poolId < _pools.length(); _poolId++) {
+        Pool.Data storage _pool =  _pools.get(_poolId);
+
+        require(_exitFeePercentages[_poolId] <= 1 ether, "StakingPools: exit fee percentage should be 100% max");
+
+        uint256 _currentExitFeePercentage = _pool.exitFeePercentage;
+        if(_currentExitFeePercentage == _exitFeePercentages[_poolId]) {
+            continue;
+        }
+
+        _pool.exitFeePercentage = _exitFeePercentages[_poolId];
+        emit PoolExitFeePercentageUpdated(_poolId, _exitFeePercentages[_poolId]);
+      }
+  }
+
+  /// @dev Set the exit fee receiver
+  ///
+  /// @param _exitFeeReceiver Address that will receive the exit fees
+  function setExitFeeReceiver(address _exitFeeReceiver) external onlyGovernance {
+    exitFeeReceiver = _exitFeeReceiver;
   }
 
   /// @dev Stakes tokens into a pool.
@@ -428,7 +469,15 @@ contract StakingPools is ReentrancyGuard {
     _pool.totalDeposited = _pool.totalDeposited.sub(_withdrawAmount);
     _stake.totalDeposited = _stake.totalDeposited.sub(_withdrawAmount);
 
-    _pool.token.safeTransfer(msg.sender, _withdrawAmount);
+    uint256 _exitFeeAmount = _withdrawAmount.mul(_pool.exitFeePercentage).div(1e18);
+    if(_exitFeeAmount > 0) {
+      _pool.token.safeTransfer(exitFeeReceiver, _exitFeeAmount);
+    }
+
+    uint256 _withdrawAmountSansFee = _withdrawAmount.sub(_exitFeeAmount);
+    if(_withdrawAmountSansFee > 0) {
+      _pool.token.safeTransfer(msg.sender, _withdrawAmountSansFee);
+    }
 
     emit TokensWithdrawn(msg.sender, _poolId, _withdrawAmount);
   }
