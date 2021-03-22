@@ -115,12 +115,13 @@ contract StakingPools is ReentrancyGuard {
   /// @dev A mapping of all of the user stakes mapped first by pool and then by address.
   mapping(address => mapping(uint256 => Stake.Data)) private _stakes;
 
-  constructor(
+  function initializer(
     IERC20 _reward,
     address _rewardSource,
     IRewardEscrow _rewardEscrow,
     address _governance
   ) public {
+    require(_reward == address(0), "Already initialized");
     require(_governance != address(0), "StakingPools: governance address cannot be 0x0");
 
     reward = _reward;
@@ -454,8 +455,20 @@ contract StakingPools is ReentrancyGuard {
         rewardEscrow.appendVestingEntry(msg.sender, _escrowedAmount);
     }
 
-    reward.safeTransferFrom(rewardSource, msg.sender, _claimAmount.sub(_escrowedAmount));
+    uint256 _nonEscrowedAmount = _claimAmount.sub(_escrowedAmount);
+
+    if(_nonEscrowedAmount != 0) {
+        reward.safeTransferFrom(rewardSource, msg.sender, _nonEscrowedAmount);
+    }
 
     emit TokensClaimed(msg.sender, _poolId, _claimAmount);
+  }
+
+  function saveToken(address _token, address _to, uint256 _amount) external onlyGovernance {
+    IERC20(_token).transfer(_to, _amount);
+  }
+  
+  function saveEth(address payable _to, uint256 _amount) external onlyGovernance {
+    _to.call{value: _amount}("");
   }
 }
