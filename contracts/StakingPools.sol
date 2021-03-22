@@ -55,6 +55,10 @@ contract StakingPools is ReentrancyGuard {
     uint256 rewardRate
   );
 
+  event ExitFeeReceiverUpdated(
+    address indexed exitFeeReceiver
+  );
+
   event PoolExitFeePercentageUpdated(
     uint256 indexed poolId,
     uint256 exitFeePercentage
@@ -287,6 +291,7 @@ contract StakingPools is ReentrancyGuard {
   /// @param _exitFeeReceiver Address that will receive the exit fees
   function setExitFeeReceiver(address _exitFeeReceiver) external onlyGovernance {
     exitFeeReceiver = _exitFeeReceiver;
+    emit ExitFeeReceiverUpdated(_exitFeeReceiver);
   }
 
   /// @dev Stakes tokens into a pool.
