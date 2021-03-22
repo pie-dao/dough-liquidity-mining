@@ -68,12 +68,13 @@ describe.only("StakingPools", () => {
 
     await rewardEscrow["initialize(address,string,string)"](reward.address, "eDOUGH", "eDOUGH");
 
-    pools = (await stakingPoolsFactory.connect(deployer).deploy(
+    pools = (await stakingPoolsFactory.connect(deployer).deploy()) as StakingPools;
+    await pools.initialize(
       reward.address,
       await rewardsSource.getAddress(),
       rewardEscrow.address,
       await governance.getAddress()
-    )) as StakingPools;
+    );
 
     await reward.connect(rewardsSource).approve(pools.address, constants.MaxUint256);
   });

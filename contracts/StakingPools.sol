@@ -115,13 +115,13 @@ contract StakingPools is ReentrancyGuard {
   /// @dev A mapping of all of the user stakes mapped first by pool and then by address.
   mapping(address => mapping(uint256 => Stake.Data)) private _stakes;
 
-  function initializer(
+  function initialize(
     IERC20 _reward,
     address _rewardSource,
     IRewardEscrow _rewardEscrow,
     address _governance
   ) public {
-    require(address(_reward) == address(0), "Already initialized");
+    require(address(reward) == address(0), "Already initialized");
     require(_governance != address(0), "StakingPools: governance address cannot be 0x0");
 
     reward = _reward;
