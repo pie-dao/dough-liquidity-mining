@@ -121,7 +121,7 @@ contract StakingPools is ReentrancyGuard {
     IRewardEscrow _rewardEscrow,
     address _governance
   ) public {
-    require(address(reward) == address(0), "Already initialized");
+    require(address(reward) == address(0), "StakingPools: already initialized");
     require(_governance != address(0), "StakingPools: governance address cannot be 0x0");
 
     reward = _reward;
