@@ -8,8 +8,10 @@
   "scripts": {
     "remix": "remixd -s . --remix-ide https://remix.ethereum.org",
     "compile": "npx hardhat compile",
+    "coverage": "npx hardhat coverage",
     "clean": "rm -rf ./typechain && rm -rf ./artifacts && rm -rf ./cache",
-    "test": "npx hardhat test"
+    "test": "npx hardhat test",
+    "test:nocheck": "TS_NODE_TRANSPILE_ONLY=1 npx hardhat test"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^3.4.1",
@@ -41,7 +43,7 @@
     "hardhat-typechain": "^0.3.3",
     "openzeppelin-test-helpers": "^0.5.1",
     "solc": "^0.5.12",
-    "solidity-coverage": "^0.7.11",
+    "solidity-coverage": "^0.7.16",
     "solium": "^1.2.5",
     "truffle": "^5.0.43",
     "truffle-flattener": "^1.3.0",

@@ -135,6 +135,11 @@ contract StakingPools is ReentrancyGuard {
     address _governance
   ) public {
     require(address(reward) == address(0), "StakingPools: already initialized");
+
+    require(address(_reward) != address(0), "StakingPools: reward address cannot be 0x0");
+    require(address(_rewardSource) != address(0), "StakingPools: reward source address cannot be 0x0");
+    require(address(_exitFeeReceiver) != address(0), "StakingPools: exit fee receiver cannot be 0x0");
+    require(address(_rewardEscrow) != address(0), "StakingPools: reward escrow cannot be 0x0");
     require(_governance != address(0), "StakingPools: governance address cannot be 0x0");
 
     reward = _reward;
@@ -244,7 +249,7 @@ contract StakingPools is ReentrancyGuard {
   ///
   /// @param _escrowPercentages Escrow percentages 1e18 == 100%
   function setEscrowPercentages(uint256[] calldata _escrowPercentages) external onlyGovernance {
-      require(_escrowPercentages.length == _pools.length(), "StakingPools: _escrowPercentages length mismatch");
+      require(_escrowPercentages.length == _pools.length(), "StakingPools: escrow percentages length mismatch");
 
       _updatePools();
 
@@ -267,7 +272,7 @@ contract StakingPools is ReentrancyGuard {
   ///
   /// @param _exitFeePercentages Exit fee percentages. 10% == 1e17
   function setExitFeePercentages(uint256[] calldata _exitFeePercentages) external onlyGovernance {
-      require(_exitFeePercentages.length == _pools.length(), "StakingPools: _exitFeePercentages length mismatch");
+      require(_exitFeePercentages.length == _pools.length(), "StakingPools: exit fee percentages length mismatch");
 
       _updatePools();
 
@@ -290,6 +295,7 @@ contract StakingPools is ReentrancyGuard {
   ///
   /// @param _exitFeeReceiver Address that will receive the exit fees
   function setExitFeeReceiver(address _exitFeeReceiver) external onlyGovernance {
+    require(_exitFeeReceiver != address(0), "StakingPools: exit fee receiver address cannot be 0x0");
     exitFeeReceiver = _exitFeeReceiver;
     emit ExitFeeReceiverUpdated(_exitFeeReceiver);
   }
@@ -336,6 +342,19 @@ contract StakingPools is ReentrancyGuard {
     _stake.update(_pool, _ctx);
 
     _claim(_poolId);
+  }
+
+  /// @dev Withdraws staked tokens leaving the rewards. Only to be used in case of emergency
+  ///
+  /// @param _poolId the pool to exit from
+  function emergencyExit(uint256 _poolId) external nonReentrant {
+    Pool.Data storage _pool = _pools.get(_poolId);
+    _pool.update(_ctx);
+
+    Stake.Data storage _stake = _stakes[msg.sender][_poolId];
+    _stake.update(_pool, _ctx);
+
+    _withdraw(_poolId, _stake.totalDeposited);
   }
 
   /// @dev Claims all rewards from a pool and then withdraws all staked tokens.
@@ -401,6 +420,26 @@ contract StakingPools is ReentrancyGuard {
   function getPoolRewardWeight(uint256 _poolId) external view returns (uint256) {
     Pool.Data storage _pool = _pools.get(_poolId);
     return _pool.rewardWeight;
+  }
+
+  /// @dev Gets the escrow percentage of a pool which determines how much of the reward is escrowed
+  ///
+  /// @param _poolId the identifier of the pool.
+  ///
+  /// @return the pool escrow percentage
+  function getPoolEscrowPercentage(uint256 _poolId) external view returns (uint256) {
+    Pool.Data storage _pool = _pools.get(_poolId);
+    return _pool.escrowPercentage;
+  }
+
+  /// @dev Gets the exit fee percentage of a pool which determines how much of a withdraw penalty is charged
+  ///
+  /// @param _poolId the identifier of the pool.
+  ///
+  /// @return the pool exit fee percentage
+  function getPoolExitFeePercentage(uint256 _poolId) external view returns (uint256) {
+    Pool.Data storage _pool = _pools.get(_poolId);
+    return _pool.exitFeePercentage;
   }
 
   /// @dev Gets the amount of tokens per block being distributed to stakers for a pool.

@@ -9,7 +9,7 @@ import {Erc20Mock} from "../typechain/Erc20Mock";
 import {RewardEscrow} from "../typechain/RewardEscrow";
 import {RewardEscrowFactory} from "../typechain/RewardEscrowFactory";
 import {StakingPoolsFactory} from "../typechain/StakingPoolsFactory";
-import { parseEther } from "ethers/lib/utils";
+import { formatEther, parseEther } from "ethers/lib/utils";
 
 const mineBlocks = async (
     provider: providers.JsonRpcProvider,
@@ -37,6 +37,7 @@ let rewardEscrowFactory: RewardEscrowFactory;
 describe.only("StakingPools", () => {
   let deployer: Signer;
   let governance: Signer;
+  let exitFeeReceiver: Signer;
   let newGovernance: Signer;
   let rewardsSource: Signer;
   let signers: Signer[];
@@ -54,7 +55,7 @@ describe.only("StakingPools", () => {
   });
 
   beforeEach(async () => {
-    [deployer, governance, newGovernance, rewardsSource, ...signers] = await ethers.getSigners();
+    [deployer, governance, exitFeeReceiver, newGovernance, rewardsSource, ...signers] = await ethers.getSigners();
 
     reward = (await ERC20MockFactory.connect(deployer).deploy(
       "Test Token",
@@ -72,11 +73,88 @@ describe.only("StakingPools", () => {
     await pools.initialize(
       reward.address,
       await rewardsSource.getAddress(),
+      await exitFeeReceiver.getAddress(),
       rewardEscrow.address,
       await governance.getAddress()
     );
 
     await reward.connect(rewardsSource).approve(pools.address, constants.MaxUint256);
+  });
+
+  describe("initialize", () => {
+    let stakingPools: StakingPools;
+
+    beforeEach(async() => {
+      stakingPools = await stakingPoolsFactory.deploy();
+    });
+
+    it("Initializing twice should fail", async() => {
+      await stakingPools.initialize(
+        reward.address,
+        await rewardsSource.getAddress(),
+        await exitFeeReceiver.getAddress(),
+        rewardEscrow.address,
+        await governance.getAddress()
+      );
+
+      await expect(stakingPools.initialize(
+        constants.AddressZero,
+        await rewardsSource.getAddress(),
+        await exitFeeReceiver.getAddress(),
+        rewardEscrow.address,
+        await governance.getAddress()
+      )).to.be.revertedWith("StakingPools: already initialized");
+    });
+
+    it("Initializing with zero address as reward token should fail", async() => {
+      await expect(stakingPools.initialize(
+        constants.AddressZero,
+        await rewardsSource.getAddress(),
+        await exitFeeReceiver.getAddress(),
+        rewardEscrow.address,
+        await governance.getAddress()
+      )).to.be.revertedWith("StakingPools: reward address cannot be 0x0");
+    });
+
+    it("Initializing with zero address as reward source should fail", async() => {
+      await expect(stakingPools.initialize(
+        reward.address,
+        constants.AddressZero,
+        await exitFeeReceiver.getAddress(),
+        rewardEscrow.address,
+        await governance.getAddress()
+      )).to.be.revertedWith("StakingPools: reward source address cannot be 0x0");
+    });
+
+    it("Initializing with zero address as exit fee receiver should fail", async() => {
+      await expect(stakingPools.initialize(
+        reward.address,
+        await rewardsSource.getAddress(),
+        constants.AddressZero,
+        rewardEscrow.address,
+        await governance.getAddress()
+      )).to.be.revertedWith("StakingPools: exit fee receiver cannot be 0x0");
+    });
+
+    it("Initializing with zero address as reward escrow should fail", async() => {
+      await expect(stakingPools.initialize(
+        reward.address,
+        await rewardsSource.getAddress(),
+        await exitFeeReceiver.getAddress(),
+        constants.AddressZero,
+        await governance.getAddress()
+      )).to.be.revertedWith("StakingPools: reward escrow cannot be 0x0");
+    });
+
+    it("Initializing with zero address as governance should fail", async() => {
+      await expect(stakingPools.initialize(
+        reward.address,
+        await rewardsSource.getAddress(),
+        await exitFeeReceiver.getAddress(),
+        rewardEscrow.address,
+        constants.AddressZero
+      )).to.be.revertedWith("StakingPools: governance address cannot be 0x0");
+    });
   });
 
   describe("set governance", () => {
@@ -106,6 +184,11 @@ describe.only("StakingPools", () => {
         await pools.setPendingGovernance(await newGovernance.getAddress());
         await pools.connect(newGovernance).acceptGovernance()
         expect(await pools.governance()).equal(await newGovernance.getAddress());
+      });
+
+      it("reverts on governace acceptance from wrong address", async() => {
+        await pools.setPendingGovernance(await newGovernance.getAddress());
+        await expect(pools.acceptGovernance()).to.be.revertedWith("StakingPools: only pending governance");
       });
 
       it("emits GovernanceUpdated event", async () => {
@@ -142,6 +225,28 @@ describe.only("StakingPools", () => {
     });
   });
 
+  describe("Setting the exit fee receiver", async() => {
+    it("Only governance can call", async() => {
+      await expect(pools.setExitFeeReceiver(await signers[0].getAddress())).to.be.revertedWith("StakingPools: only governance");
+    });
+
+    context("when caller is governance", async () => {
+      beforeEach(async () => (pools = pools.connect(governance)));
+
+      it("Setting the exit fee receiver to the 0x0 address should fail", async() => {
+        await expect(pools.setExitFeeReceiver(constants.AddressZero)).to.be.revertedWith("StakingPools: exit fee receiver address cannot be 0x0");
+      });
+
+      it("Setting the exit fee receiver", async() => {
+        const newReceiver = await signers[0].getAddress();
+        await pools.setExitFeeReceiver(newReceiver);
+        const actualReceiver = await pools.exitFeeReceiver();
+
+        expect(actualReceiver).to.eq(newReceiver);
+      });
+    });
+  });
+
   describe("create pool", () => {
     let token: Erc20Mock;
 
@@ -166,6 +271,35 @@ describe.only("StakingPools", () => {
         expect(pools.createPool(token.address))
           .emit(pools, "PoolCreated")
           .withArgs(0, token.address);
+      });
+
+      it("Adding multiple pools", async() => {
+        const token2 = (await ERC20MockFactory.connect(deployer).deploy(
+          "Staking Token",
+          "STAKE",
+          18
+        )) as Erc20Mock;
+
+        const token3 = (await ERC20MockFactory.connect(deployer).deploy(
+          "Staking Token",
+          "STAKE",
+          18
+        )) as Erc20Mock;
+        
+        await pools.createPool(token.address);
+        const poolCountBefore = await pools.poolCount();
+        await pools.createPool(token2.address);
+        await pools.createPool(token3.address);
+        const poolCountAfter = await pools.poolCount();
+
+        const pool1Token = await pools.getPoolToken(0);
+        const pool2Token = await pools.getPoolToken(1);
+        const pool3Token = await pools.getPoolToken(2);
+        
+        expect(poolCountAfter).to.eq(poolCountBefore.add(2));
+        expect(pool1Token).to.eq(token.address);
+        expect(pool2Token).to.eq(token2.address);
+        expect(pool3Token).to.eq(token3.address);
       });
 
       context("when reusing token", async () => {
@@ -207,7 +341,43 @@ describe.only("StakingPools", () => {
             expect(await pools.getPoolRewardWeight(poolId)).equal(rewardWeights[poolId]);
           }
         });
+
+        it("updating the reward weights with the same values should leave them unchanged", async() => {
+          await pools.setRewardWeights(rewardWeights);
+          
+          for (let poolId = 0; poolId < rewardWeights.length; poolId++) {
+            expect(await pools.getPoolRewardWeight(poolId)).equal(rewardWeights[poolId]);
+          }
+        });
+        
       };
+
+      it("getting the reward rate per pool should be correct", async() => {
+        const tokenFactory = await ERC20MockFactory.connect(deployer)
+        
+        const token1 = await tokenFactory.deploy(
+          "Staking Token",
+          "STAKE",
+          18
+        ) as Erc20Mock;
+        await pools.createPool(token1.address);
+  
+        const token2 = await tokenFactory.deploy(
+          "Staking Token",
+          "STAKE",
+          18
+        ) as Erc20Mock;
+        await pools.createPool(token2.address);
+
+        const totalRewardRate = parseEther("1");
+
+        await pools.setRewardRate(totalRewardRate);
+        await pools.setRewardWeights([1, 1]);
+  
+        const poolRewardRate = await pools.getPoolRewardRate(0);
+
+        expect(poolRewardRate).to.eq(totalRewardRate.div(2));
+      });
 
       it("reverts when weight array length mismatches", () => {
         expect(pools.setRewardWeights([1])).revertedWith(
@@ -268,6 +438,203 @@ describe.only("StakingPools", () => {
       });
     });
   });
+
+  describe("set pool escrow percentages", () => {
+    it("only allows governance to call", async () => {
+      expect(pools.setEscrowPercentages([1])).revertedWith(
+        "StakingPools: only governance"
+      );
+    });
+
+    context("when caller is governance", () => {
+      beforeEach(async () => (pools = pools.connect(governance)));
+
+      const shouldBehaveLikeSetEscrowPercentages = (
+        escrowPercentages: BigNumberish[]
+      ) => {
+        beforeEach(async () => {
+          await pools.setEscrowPercentages(escrowPercentages);
+        });
+
+        it("updates the escrow percentages", async () => {
+          for (let poolId = 0; poolId < escrowPercentages.length; poolId++) {
+            expect(await pools.getPoolEscrowPercentage(poolId)).equal(escrowPercentages[poolId]);
+          }
+        });
+
+        it("updating the escrow percentages with the same values should leave them unchanged", async() => {
+          await pools.setEscrowPercentages(escrowPercentages);
+          
+          for (let poolId = 0; poolId < escrowPercentages.length; poolId++) {
+            expect(await pools.getPoolEscrowPercentage(poolId)).equal(escrowPercentages[poolId]);
+          }
+        });
+        
+      };
+
+      it("reverts when escrow percentages array length mismatches", () => {
+        expect(pools.setEscrowPercentages([1])).revertedWith(
+          "StakingPools: escrow percentages length mismatch"
+        );
+      });
+
+
+      context("with one pool", async () => {
+        let token: Erc20Mock;
+
+        beforeEach(async () => {
+          token = (await ERC20MockFactory.connect(deployer).deploy(
+            "Staking Token",
+            "STAKE",
+            18
+          )) as Erc20Mock;
+        });
+
+        beforeEach(async () => {
+          await pools.connect(governance).createPool(token.address);
+        });
+
+        it("setting an escrow percentage above 100% (1e18) should fail", async() => {
+          await expect(pools.connect(governance).setEscrowPercentages([parseEther("1.1")])).to.be.revertedWith("escrow percentage should be 100% max");
+        });
+
+        shouldBehaveLikeSetEscrowPercentages([10000]);
+      });
+
+      context("with many pools", async () => {
+        let numberPools = 5;
+        let tokens: Erc20Mock[];
+
+        beforeEach(async () => {
+          tokens = new Array<Erc20Mock>();
+          for (let i = 0; i < numberPools; i++) {
+            tokens.push(
+              (await ERC20MockFactory.connect(deployer).deploy(
+                "Staking Token",
+                "STAKE",
+                18
+              )) as Erc20Mock
+            );
+          }
+        });
+
+        beforeEach(async () => {
+          for (let n = 0; n < numberPools; n++) {
+            await pools
+              .connect(governance)
+              .createPool(tokens[n].address);
+          }
+        });
+
+        shouldBehaveLikeSetEscrowPercentages([
+          10000,
+          20000,
+          30000,
+          40000,
+          50000,
+        ]);
+      });
+    });
+  });
+
+  describe("set pool exit fee percentages", () => {
+    it("only allows governance to call", async () => {
+      expect(pools.setExitFeePercentages([1])).revertedWith(
+        "StakingPools: only governance"
+      );
+    });
+
+    context("when caller is governance", () => {
+      beforeEach(async () => (pools = pools.connect(governance)));
+
+      const shouldBehaveLikeSetExitFeePercentages = (
+        exitFeePercentages: BigNumberish[]
+      ) => {
+        beforeEach(async () => {
+          await pools.setExitFeePercentages(exitFeePercentages);
+        });
+
+        it("updates the exit fee percentages", async () => {
+          for (let poolId = 0; poolId < exitFeePercentages.length; poolId++) {
+            expect(await pools.getPoolExitFeePercentage(poolId)).equal(exitFeePercentages[poolId]);
+          }
+        });
+
+        it("updating the exit fee percentages with the same values should leave them unchanged", async() => {
+          await pools.setExitFeePercentages(exitFeePercentages);
+          
+          for (let poolId = 0; poolId < exitFeePercentages.length; poolId++) {
+            expect(await pools.getPoolExitFeePercentage(poolId)).equal(exitFeePercentages[poolId]);
+          }
+        });
+        
+      };
+
+      it("reverts when exit fee percentages array length mismatches", () => {
+        expect(pools.setExitFeePercentages([1])).revertedWith(
+          "StakingPools: exit fee percentages length mismatch"
+        );
+      });
+
+
+      context("with one pool", async () => {
+        let token: Erc20Mock;
+
+        beforeEach(async () => {
+          token = (await ERC20MockFactory.connect(deployer).deploy(
+            "Staking Token",
+            "STAKE",
+            18
+          )) as Erc20Mock;
+        });
+
+        beforeEach(async () => {
+          await pools.connect(governance).createPool(token.address);
+        });
+
+        it("setting an exit fee percentage above 100% (1e18) should fail", async() => {
+          await expect(pools.connect(governance).setExitFeePercentages([parseEther("1.1")])).to.be.revertedWith("StakingPools: exit fee percentage should be 100% max");
+        });
+
+        shouldBehaveLikeSetExitFeePercentages([10000]);
+      });
+
+      context("with many pools", async () => {
+        let numberPools = 5;
+        let tokens: Erc20Mock[];
+
+        beforeEach(async () => {
+          tokens = new Array<Erc20Mock>();
+          for (let i = 0; i < numberPools; i++) {
+            tokens.push(
+              (await ERC20MockFactory.connect(deployer).deploy(
+                "Staking Token",
+                "STAKE",
+                18
+              )) as Erc20Mock
+            );
+          }
+        });
+
+        beforeEach(async () => {
+          for (let n = 0; n < numberPools; n++) {
+            await pools
+              .connect(governance)
+              .createPool(tokens[n].address);
+          }
+        });
+
+        shouldBehaveLikeSetExitFeePercentages([
+          10000,
+          20000,
+          30000,
+          40000,
+          50000,
+        ]);
+      });
+    });
+  });
+
 
   describe("deposit tokens", () => {
     let depositor: Signer;
@@ -422,6 +789,173 @@ describe.only("StakingPools", () => {
       });
 
       shouldBehaveLikeWithdraw(0, withdrawAmount)
+    });
+  });
+
+
+  /// here
+  describe("emergency exit tokens", () => {
+    let depositor: Signer;
+    let token: Erc20Mock;
+
+    beforeEach(async () => {
+      [depositor, ...signers] = signers;
+      token = (await ERC20MockFactory.connect(deployer).deploy(
+        "Staking Token",
+        "STAKE",
+        18
+      )) as Erc20Mock;
+
+      await pools.connect(governance).createPool(token.address);
+      await pools.connect(governance).setRewardWeights([1]);
+      await pools.connect(governance).setRewardRate(parseEther("1"));
+      // reset reward approval to confirm emergency exit works
+      await reward.connect(rewardsSource).approve(pools.address, 0);
+    });
+
+    const shouldBehaveLikeEmergencyExit = (
+      poolId: BigNumberish,
+    ) => {
+      let startingTokenBalance: BigNumber;
+      let startingTotalDeposited: BigNumber;
+      let startingDeposited: BigNumber;
+
+      beforeEach(async () => {
+        startingTokenBalance = await token.balanceOf(await depositor.getAddress());
+        startingTotalDeposited = await pools.getPoolTotalDeposited(0);
+        startingDeposited = await pools.getStakeTotalDeposited(await depositor.getAddress(), 0);
+      });
+
+      beforeEach(async () => {
+        await pools.emergencyExit(poolId);
+      });
+
+      it("decrements total deposited amount", async () => {
+        expect(await pools.getPoolTotalDeposited(0))
+          .equal(startingTotalDeposited.sub(startingDeposited));
+      });
+
+      it("decrements deposited amount", async () => {
+        expect(await pools.getStakeTotalDeposited(await depositor.getAddress(), 0))
+          .equal(0);
+      });
+
+      it("transfers deposited tokens", async () => {
+        expect(await token.balanceOf(await depositor.getAddress())).equal(
+          startingTokenBalance.add(startingDeposited)
+        );
+      });
+    };
+
+    context("with previous deposits", async () => {
+      let depositAmount = 50000;
+
+      beforeEach(async () => {
+        token = token.connect(depositor)
+        await token.connect(deployer).mint(await depositor.getAddress(), MAXIMUM_U256.sub(depositAmount));
+        await token.connect(depositor).approve(pools.address, MAXIMUM_U256);
+        await token.mint(await depositor.getAddress(), depositAmount);
+        await token.approve(pools.address, depositAmount);
+
+        pools = pools.connect(depositor)
+        await pools.deposit(0, depositAmount);
+      });
+
+      shouldBehaveLikeEmergencyExit(0)
+    });
+  });
+
+  describe.only("exit tokens", () => {
+    let depositor: Signer;
+    let token: Erc20Mock;
+
+    beforeEach(async () => {
+      [depositor, ...signers] = signers;
+      token = (await ERC20MockFactory.connect(deployer).deploy(
+        "Staking Token",
+        "STAKE",
+        18
+      )) as Erc20Mock;
+
+      await pools.connect(governance).createPool(token.address);
+      await pools.connect(governance).setRewardWeights([1]);
+    });
+
+    const shouldBehaveLikeExit = (
+      poolId: BigNumberish,
+      exitFee: BigNumberish = 0
+    ) => {
+      let startingTokenBalance: BigNumber;
+      let startingTotalDeposited: BigNumber;
+      let startingDeposited: BigNumber;
+      let expectedExitFee: BigNumber;
+
+      beforeEach(async () => {
+        startingTokenBalance = await token.balanceOf(await depositor.getAddress());
+        startingTotalDeposited = await pools.getPoolTotalDeposited(0);
+        startingDeposited = await pools.getStakeTotalDeposited(await depositor.getAddress(), 0);
+
+        await pools.connect(governance).setExitFeePercentages([poolId]);
+        expectedExitFee = startingDeposited.mul(exitFee).div(parseEther("1"));
+      });
+
+      beforeEach(async () => {
+        await pools.exit(poolId);
+      });
+
+      it("decrements total deposited amount", async () => {
+        expect(await pools.getPoolTotalDeposited(0))
+          .equal(startingTotalDeposited.sub(startingDeposited));
+      });
+
+      it("decrements deposited amount", async () => {
+        expect(await pools.getStakeTotalDeposited(await depositor.getAddress(), 0))
+          .equal(0);
+      });
+
+      it("transfers deposited tokens", async () => {
+        const tokenBalance = await token.balanceOf(await depositor.getAddress());
+        // const expectedBalance = tokenBalance.sub()
+        console.log("expectedExitFee", formatEther(expectedExitFee));
+        console.log("tokenBalance", formatEther(tokenBalance));
+        expect(tokenBalance).equal(
+          startingTokenBalance.add(startingDeposited.sub(expectedExitFee))
+        );
+      });
+    };
+
+    context("with previous deposits", async () => {
+      let depositAmount = 50000;
+
+      beforeEach(async () => {
+        token = token.connect(depositor)
+        await token.connect(deployer).mint(await depositor.getAddress(), MAXIMUM_U256.sub(depositAmount));
+        await token.connect(depositor).approve(pools.address, MAXIMUM_U256);
+        await token.mint(await depositor.getAddress(), depositAmount);
+        await token.approve(pools.address, depositAmount);
+
+        pools = pools.connect(depositor)
+        await pools.deposit(0, depositAmount);
+      });
+
+      shouldBehaveLikeExit(0)
+    });
+
+    context("with previous deposits and exit fee", async () => {
+      let depositAmount = 50000;
+
+      beforeEach(async () => {
+        token = token.connect(depositor)
+        await token.connect(deployer).mint(await depositor.getAddress(), depositAmount);
+        await token.connect(depositor).approve(pools.address, MAXIMUM_U256);
+        await token.mint(await depositor.getAddress(), depositAmount);
+        await token.approve(pools.address, depositAmount);
+
+        pools = pools.connect(depositor)
+        await pools.deposit(0, depositAmount);
+      });
+
+      shouldBehaveLikeExit(0, parseEther("0.5"));
     });
   });
 
