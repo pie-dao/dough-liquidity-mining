@@ -77,7 +77,8 @@ describe.only("StakingPools", () => {
       rewardEscrow.address,
       await governance.getAddress()
     );
-
+    
+    await rewardEscrow.addRewardsContract(pools.address);
     await reward.connect(rewardsSource).approve(pools.address, constants.MaxUint256);
   });
 
@@ -865,7 +866,7 @@ describe.only("StakingPools", () => {
     });
   });
 
-  describe.only("exit tokens", () => {
+  describe("exit tokens", () => {
     let depositor: Signer;
     let token: Erc20Mock;
 
@@ -886,16 +887,18 @@ describe.only("StakingPools", () => {
       exitFee: BigNumberish = 0
     ) => {
       let startingTokenBalance: BigNumber;
+      let startingExitFeeReceiverTokenBalance: BigNumber;
       let startingTotalDeposited: BigNumber;
       let startingDeposited: BigNumber;
       let expectedExitFee: BigNumber;
 
       beforeEach(async () => {
         startingTokenBalance = await token.balanceOf(await depositor.getAddress());
+        startingExitFeeReceiverTokenBalance = await token.balanceOf(await exitFeeReceiver.getAddress());
         startingTotalDeposited = await pools.getPoolTotalDeposited(0);
         startingDeposited = await pools.getStakeTotalDeposited(await depositor.getAddress(), 0);
 
-        await pools.connect(governance).setExitFeePercentages([poolId]);
+        await pools.connect(governance).setExitFeePercentages([exitFee]);
         expectedExitFee = startingDeposited.mul(exitFee).div(parseEther("1"));
       });
 
@@ -915,12 +918,13 @@ describe.only("StakingPools", () => {
 
       it("transfers deposited tokens", async () => {
         const tokenBalance = await token.balanceOf(await depositor.getAddress());
-        // const expectedBalance = tokenBalance.sub()
-        console.log("expectedExitFee", formatEther(expectedExitFee));
-        console.log("tokenBalance", formatEther(tokenBalance));
+        const exitFeeReceiverBalance = await token.balanceOf(await exitFeeReceiver.getAddress());
         expect(tokenBalance).equal(
           startingTokenBalance.add(startingDeposited.sub(expectedExitFee))
         );
+        expect(exitFeeReceiverBalance).equal(
+          expectedExitFee
+        )
       });
     };
 
@@ -941,7 +945,7 @@ describe.only("StakingPools", () => {
       shouldBehaveLikeExit(0)
     });
 
-    context("with previous deposits and exit fee", async () => {
+    context("with previous deposits and exit fee of 50%", async () => {
       let depositAmount = 50000;
 
       beforeEach(async () => {
@@ -957,7 +961,26 @@ describe.only("StakingPools", () => {
 
       shouldBehaveLikeExit(0, parseEther("0.5"));
     });
+
+    context("with previous deposits and exit fee of 100%", async () => {
+      let depositAmount = 50000;
+
+      beforeEach(async () => {
+        token = token.connect(depositor)
+        await token.connect(deployer).mint(await depositor.getAddress(), depositAmount);
+        await token.connect(depositor).approve(pools.address, MAXIMUM_U256);
+        await token.mint(await depositor.getAddress(), depositAmount);
+        await token.approve(pools.address, depositAmount);
+
+        pools = pools.connect(depositor)
+        await pools.deposit(0, depositAmount);
+      });
+
+      shouldBehaveLikeExit(0, parseEther("1"));
+    });
   });
+
+  
 
   describe("claim tokens", () => {
     let depositor: Signer;
@@ -1039,6 +1062,75 @@ describe.only("StakingPools", () => {
           .gte(rewardAmount - EPSILON)
           .lte(rewardAmount);
       });
+
+      it("clears unclaimed amount", async () => {
+        expect(await pools.getStakeTotalUnclaimed(await depositor.getAddress(), 0)).equal(0);
+      });
+    });
+
+    context("with escrow percentage at 50%", () => {
+      const EPSILON: number = 5;
+      const escrowPercentage = parseEther("0.5");
+
+      let elapsedBlocks = 1000;
+
+      beforeEach(async () => {
+        await pools.connect(governance).setRewardRate(rewardRate);
+        await pools.connect(governance).setEscrowPercentages([escrowPercentage]);
+        pools = pools.connect(depositor)
+        await pools.deposit(0, depositAmount);
+        await mineBlocks(ethers.provider, elapsedBlocks);
+        await pools.claim(0);
+      });
+
+      it("mints reward tokens", async () => {
+        const rewardAmount = BigNumber.from(rewardRate * (elapsedBlocks + 1));
+        const escrowAmount = rewardAmount.mul(escrowPercentage).div(parseEther("1"));
+        const rewardAmountSansEscrow = rewardAmount.sub(escrowAmount);
+
+        expect(await reward.balanceOf(await depositor.getAddress()))
+          .gte(rewardAmountSansEscrow.sub(EPSILON))
+          .lte(rewardAmountSansEscrow);
+        expect(await reward.balanceOf(await rewardEscrow.address))
+          .gte(escrowAmount.sub(EPSILON))
+          .lte(escrowAmount);
+      });
+
+      it("clears unclaimed amount", async () => {
+        expect(await pools.getStakeTotalUnclaimed(await depositor.getAddress(), 0)).equal(0);
+      });
+    });
+
+    context("with escrow percentage at 100%", () => {
+      const EPSILON: number = 5;
+      const escrowPercentage = parseEther("1");
+
+      let elapsedBlocks = 1000;
+
+      beforeEach(async () => {
+        await pools.connect(governance).setRewardRate(rewardRate);
+        await pools.connect(governance).setEscrowPercentages([escrowPercentage]);
+        pools = pools.connect(depositor)
+        await pools.deposit(0, depositAmount);
+        await mineBlocks(ethers.provider, elapsedBlocks);
+        await pools.claim(0);
+      });
+
+      it("mints reward tokens", async () => {
+        const rewardAmount = BigNumber.from(rewardRate * (elapsedBlocks + 1));
+        const escrowAmount = rewardAmount.mul(escrowPercentage).div(parseEther("1"));
+        const rewardAmountSansEscrow = rewardAmount.sub(escrowAmount);
+
+        console.log("escrowAmount", formatEther(escrowAmount));
+        console.log("rewardAmountSansEscrow", formatEther(rewardAmountSansEscrow));
+
+        expect(await reward.balanceOf(await depositor.getAddress()))
+          .gte(rewardAmountSansEscrow.sub(EPSILON))
+          .lte(rewardAmountSansEscrow);
+        expect(await reward.balanceOf(await rewardEscrow.address))
+          .gte(escrowAmount.sub(EPSILON))
+          .lte(escrowAmount);
+        });
 
       it("clears unclaimed amount", async () => {
         expect(await pools.getStakeTotalUnclaimed(await depositor.getAddress(), 0)).equal(0);
