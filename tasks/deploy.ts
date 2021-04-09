@@ -1,5 +1,7 @@
 import { parseEther } from "ethers/lib/utils";
 import { task } from "hardhat/config";
+import { RewardEscrow } from "../typechain/RewardEscrow";
+import { RewardEscrowFactory } from "../typechain/RewardEscrowFactory";
 import { StakingPoolsFactory } from "../typechain/StakingPoolsFactory";
 
 task("deploy-staking-pools")
@@ -30,4 +32,20 @@ task("initialize-staking-pools")
         );
 
         console.log(`Contract initialized at ${tx.hash}`)
+});
+
+task("deploy-reward-escrow")
+    .addParam("dough")
+    .setAction(async(taskArgs, {ethers}) => {
+        const rewardEscrowFactory = await ethers.getContractFactory("RewardEscrow") as RewardEscrowFactory;
+
+        const rewardEscrow = await rewardEscrowFactory.deploy() as RewardEscrow;
+
+        const tx = await rewardEscrow["initialize(address,string,string)"](
+            taskArgs.dough,
+            "eDOUGH",
+            "eDOUGH"
+        );
+
+        console.log(`Intialised at: ${tx.hash}`);
 });

@@ -36,6 +36,21 @@ library Pool {
     uint256 exitFeePercentage;
   }
 
+  struct ViewData {
+    IERC20 token;
+    uint256 totalDeposited;
+    uint256 rewardWeight;
+    FixedPointMath.uq192x64 accumulatedRewardWeight;
+    uint256 lastUpdatedBlock;
+    uint256 escrowPercentage;
+    uint256 exitFeePercentage;
+    uint256 rewardRate;
+    uint256 userDeposited;
+    uint256 userUnclaimed;
+    uint256 userTokenBalance;
+    uint256 userTokenApproval;
+  }
+
   struct List {
     Data[] elements;
   }

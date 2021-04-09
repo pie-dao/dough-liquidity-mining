@@ -2,8 +2,6 @@
 pragma solidity ^0.6.12;
 pragma experimental ABIEncoderV2;
 
-//import "hardhat/console.sol";
-
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -15,8 +13,6 @@ import {Pool} from "./libraries/pools/Pool.sol";
 import {Stake} from "./libraries/pools/Stake.sol";
 
 import {IRewardEscrow} from "./interfaces/IRewardEscrow.sol";
-
-import "hardhat/console.sol";
 
 /// @title StakingPools
 //    ___    __        __                _               ___                              __         _ 
@@ -97,6 +93,22 @@ contract StakingPools is ReentrancyGuard {
     uint256 amount
   );
 
+  event ReferrerSet(
+    address indexed user,
+    address indexed referrer
+  );
+
+  event ReferrerPaid(
+    address indexed user,
+    address indexed referrer,
+    uint256 amount
+  );
+
+  event ReferrerClaimed(
+    address indexed referrer,
+    uint256 amount
+  );
+
   /// @dev The token which will be minted as a reward for staking.
   IERC20 public reward;
 
@@ -127,6 +139,19 @@ contract StakingPools is ReentrancyGuard {
   /// @dev A mapping of all of the user stakes mapped first by pool and then by address.
   mapping(address => mapping(uint256 => Stake.Data)) private _stakes;
 
+  /// @dev Who referred who
+  mapping(address => address) public referrerOf;
+
+  /// @dev Amount of referral rewards
+  mapping(address => uint256) public referrerBalanceOf;
+
+  /// @dev referral percentage of referrer
+  mapping(address => uint256) public referralPercentageOf;
+
+  /// @dev referral escrow percentage for the referrer
+  mapping(address => uint256) public referralEscrowPercentageOf;
+
+
   function initialize(
     IERC20 _reward,
     address _rewardSource,
@@ -144,9 +169,9 @@ contract StakingPools is ReentrancyGuard {
 
     reward = _reward;
     rewardSource = _rewardSource;
+    exitFeeReceiver = _exitFeeReceiver;
     rewardEscrow = _rewardEscrow;
     governance = _governance;
-    exitFeeReceiver = _exitFeeReceiver;
   }
 
   /// @dev A modifier which reverts when the caller is not the governance.
@@ -180,7 +205,7 @@ contract StakingPools is ReentrancyGuard {
   ///
   /// This will update all of the pools.
   ///
-  /// @param _rewardRate The number of tokens to distribute per second.
+  /// @param _rewardRate The number of tokens to distribute per block.
   function setRewardRate(uint256 _rewardRate) external onlyGovernance {
     _updatePools();
 
@@ -300,6 +325,17 @@ contract StakingPools is ReentrancyGuard {
     emit ExitFeeReceiverUpdated(_exitFeeReceiver);
   }
 
+
+  /// @dev Set refferer values
+  ///
+  /// @param _referrer Address of the referrer
+  /// @param _referralPercentage ReferralPercentage
+  /// @param _referralEscrowPercentage Amount of rewards that get escrowed
+  function setReferrerValues(address _referrer, uint256 _referralPercentage, uint256 _referralEscrowPercentage) external onlyGovernance {
+    referralPercentageOf[_referrer] = _referralPercentage;
+    referralEscrowPercentageOf[_referrer] = _referralEscrowPercentage;
+  }
+
   /// @dev Stakes tokens into a pool.
   ///
   /// @param _poolId        the pool to deposit tokens into.
@@ -310,6 +346,26 @@ contract StakingPools is ReentrancyGuard {
 
     Stake.Data storage _stake = _stakes[msg.sender][_poolId];
     _stake.update(_pool, _ctx);
+
+    _deposit(_poolId, _depositAmount);
+  }
+
+  /// @dev Stakes tokens into a pool.
+  ///
+  /// @param _poolId        the pool to deposit tokens into.
+  /// @param _depositAmount the amount of tokens to deposit.
+  function depositReferred(uint256 _poolId, uint256 _depositAmount, address _referrer) external nonReentrant {
+    Pool.Data storage _pool = _pools.get(_poolId);
+    _pool.update(_ctx);
+
+    Stake.Data storage _stake = _stakes[msg.sender][_poolId];
+    _stake.update(_pool, _ctx);
+
+    // set referrer if not already set
+    if(referrerOf[msg.sender] == address(0)) {
+      referrerOf[msg.sender] = _referrer;
+      emit ReferrerSet(msg.sender, _referrer);
+    }
 
     _deposit(_poolId, _depositAmount);
   }
@@ -342,6 +398,26 @@ contract StakingPools is ReentrancyGuard {
     _stake.update(_pool, _ctx);
 
     _claim(_poolId);
+  }
+
+  /// @dev Claim referral rewards
+  function claimReferralRewards() external nonReentrant {
+    uint256 _amount = referrerBalanceOf[msg.sender];
+    referrerBalanceOf[msg.sender] = 0;
+
+    uint256 _escrowedAmount = _amount.mul(referralEscrowPercentageOf[msg.sender]).div(1e18);
+
+    if(_escrowedAmount != 0) {
+        // escrow
+        reward.safeTransferFrom(rewardSource, address(rewardEscrow), _escrowedAmount);
+        rewardEscrow.appendVestingEntry(msg.sender, _escrowedAmount);
+    }
+
+     uint256 _nonEscrowedAmount = _amount.sub(_escrowedAmount);
+
+    if(_nonEscrowedAmount != 0) {
+      reward.safeTransferFrom(rewardSource, msg.sender, _nonEscrowedAmount);
+    }
   }
 
   /// @dev Withdraws staked tokens leaving the rewards. Only to be used in case of emergency
@@ -452,6 +528,37 @@ contract StakingPools is ReentrancyGuard {
     return _pool.getRewardRate(_ctx);
   }
 
+  /// @dev Get all pools and info
+  ///
+  /// @param _account address of the specific
+  ///
+  /// @return pools info
+  function getPools(address _account) external view returns (Pool.ViewData[] memory) {
+    Pool.ViewData[] memory _data = new Pool.ViewData[](_pools.length());
+
+    for(uint256 i = 0; i < _pools.length(); i++) {
+      Pool.Data storage _pool = _pools.get(i);
+      Stake.Data storage _stake = _stakes[_account][i];
+
+      _data[i] = Pool.ViewData({
+        token: _pool.token,
+        totalDeposited: _pool.totalDeposited,
+        rewardWeight: _pool.rewardWeight,
+        accumulatedRewardWeight: _pool.accumulatedRewardWeight,
+        lastUpdatedBlock: _pool.lastUpdatedBlock,
+        escrowPercentage: _pool.escrowPercentage,
+        exitFeePercentage: _pool.exitFeePercentage,
+        rewardRate: _pool.getRewardRate(_ctx),
+        userDeposited: _stake.totalDeposited,
+        userUnclaimed: _stake.getUpdatedTotalUnclaimed(_pool, _ctx),
+        userTokenBalance: _pool.token.balanceOf(_account),
+        userTokenApproval: _pool.token.allowance(_account, address(this))
+      });
+    }
+
+    return _data; 
+  }
+
   /// @dev Gets the number of tokens a user has staked into a pool.
   ///
   /// @param _account The account to query.
@@ -551,7 +658,15 @@ contract StakingPools is ReentrancyGuard {
     uint256 _nonEscrowedAmount = _claimAmount.sub(_escrowedAmount);
 
     if(_nonEscrowedAmount != 0) {
-        reward.safeTransferFrom(rewardSource, msg.sender, _nonEscrowedAmount);
+      reward.safeTransferFrom(rewardSource, msg.sender, _nonEscrowedAmount);
+    }
+
+    address _referrer = referrerOf[msg.sender];
+
+    if(_referrer != address(0)) {
+      uint256 _referralAmount = _claimAmount.mul(referralPercentageOf[_referrer]).div(1e18);
+      referrerBalanceOf[_referrer] = referrerBalanceOf[_referrer].add(_referralAmount);
+      emit ReferrerPaid(msg.sender, _referrer, _referralAmount);
     }
 
     emit TokensClaimed(msg.sender, _poolId, _claimAmount);
