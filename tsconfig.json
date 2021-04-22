@@ -9,7 +9,7 @@
       "strictNullChecks": false,
       "sourceMap": true
     },
-    "include": ["./scripts", "./test", "./artifacts", "./hardhat.config.ts"],
+    "include": ["./scripts", "./test", "./artifacts", "./hardhat.config.ts", "./tasks"],
     "files": [
       "./hardhat.config.ts",
       "node_modules/@nomiclabs/hardhat-ethers/src/type-extensions.ts",

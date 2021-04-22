@@ -7,8 +7,6 @@ import "@nomiclabs/hardhat-etherscan";
 
 import "solidity-coverage";
 
-import "./tasks/deploy";
-
 const config: HardhatUserConfig = {
   solidity: {
     compilers: [
@@ -34,17 +32,7 @@ const config: HardhatUserConfig = {
   },
   networks: {
     goerli: {
-      url: `https://goerli.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
-      accounts: [
-        process.env.PRIVATE_KEY
-      ],
-      gasPrice: 40000000000
-    },
-    kovan: {
-      url: `https://kovan.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
-      accounts: [
-        process.env.PRIVATE_KEY
-      ]
+      url: `https://goerli.infura.io/v3/${process.env.INFURA_PROJECT_ID}`
     },
     mainnet: {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_PROJECT_ID}`
