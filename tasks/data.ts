@@ -2,7 +2,7 @@ import { task } from "hardhat/config";
 
 import { StakingPoolsFactory } from "../typechain/StakingPoolsFactory"
 
-task("fetch-referral-data")
+task("fetch-referral-data", "fetch referers and the amounts they refered")
     .addParam("contract", "StakingPools contract")
     .setAction(async(taskArgs, {ethers}) => {
         const signer = (await ethers.getSigners())[0];
