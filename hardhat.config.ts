@@ -8,6 +8,7 @@ import "@nomiclabs/hardhat-etherscan";
 import "solidity-coverage";
 
 import "./tasks/deploy";
+import "./tasks/data";
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -47,7 +48,10 @@ const config: HardhatUserConfig = {
       ]
     },
     mainnet: {
-      url: `https://mainnet.infura.io/v3/${process.env.INFURA_PROJECT_ID}`
+      url: `https://mainnet.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
+      accounts: [
+        process.env.PRIVATE_KEY
+      ],
     },
     frame: {
       url: "http://localhost:1248"
