@@ -121,3 +121,92 @@ function balanceOf(address account) external
 ```solidity
 function totalSupply() external
 ```
+
+## StakingPools
+
+The staking used currently used is a fork of the [contract made by Alchemix](https://github.com/alchemix-finance/alchemix-protocol/blob/master/contracts/StakingPools.sol).
+
+What we've added:
+
+- Upgradeablity using the OpenZeppelin upgradable contracts
+- Refferal system
+- Easy Getter to fetch all LP positions
+- Configurable escrow percentage
+- Configurable exit fee percentage
+
+
+### Admin functions
+
+#### Setting a new governance address
+
+Setting the governance address is a two step process. First the old ``governance`` address needs to set a new pending address:
+
+```solidity
+function setPendingGovernance(address _pendingGovernance) external
+```
+
+After this the new ``governance`` address can accept it:
+
+```solidity
+function acceptGovernance() external
+```
+
+#### Set the reward rate
+
+The reward rate sets the amount of tokens in total to disperse per block. Only the ``governance`` address can call this.
+
+```solidity
+function setRewardRate(uint256 _rewardRate) external
+```
+
+#### Creating a new pool
+
+A new token which can be staked can be added by the ``governance`` address. By default the ``escrowPercentage``, ``exitFeePercentage`` and ``rewardWeight`` will be set to 0
+
+```solidity
+function createPool(IERC20 _token) external returns (uint256 newPoolId)
+```
+
+#### Setting pool params 
+
+When a new pool is added ``escrowPercentage``, ``exitFeePercentage`` and ``rewardWeight`` will be set to 0. It can be updated by the ``governance`` address by calling the following functions:
+
+All functions update all pools at the same time. Make sure you know the order of the pools.
+
+The reward weights determin how the ``rewardRate`` is split up between pools
+
+```solidity
+function setRewardWeights(uint256[] calldata _rewardWeights) external
+```
+
+The escrow percentages determin what percentage of rewards are locked in the ``RewardEscrow`` contract
+
+```solidity
+function setEscrowPercentages(uint256[] calldata _escrowPercentages) external
+```
+
+The exit fee percentages how much of an exit fee is charged when unstaking
+
+```solidity
+function setExitFeePercentages(uint256[] calldata _exitFeePercentages) external
+```
+
+#### Setting the address which receives the exit fees
+
+Can only be called by the ``governance`` address.
+
+```solidity
+function setExitFeeReceiver(address _exitFeeReceiver) external
+```
+
+#### Setting referrer values
+
+Addresses which would like to participate in the referral program for liquidity mining need to be whitelisted by the ``governance`` address.
+
+```solidity
+function setReferrerValues(address _referrer, uint256 _referralPercentage, uint256 _referralEscrowPercentage) external
+```
+
+### Integration
+
+TODO
