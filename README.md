@@ -209,4 +209,116 @@ function setReferrerValues(address _referrer, uint256 _referralPercentage, uint2
 
 ### Integration
 
-TODO
+#### Deposit
+
+Approve the deposit token first and call to deposit.
+
+```solidity
+function deposit(uint256 _poolId, uint256 _depositAmount) external;
+```
+
+To pass the referrer on deposit call.
+
+```solidity
+function depositReferred(uint256 _poolId, uint256 _depositAmount, address _referrer) external;
+```
+
+#### Withdraw
+
+Withdraw deposit token and rewards
+
+```solidity
+function withdraw(uint256 _poolId, uint256 _withdrawAmount) external
+```
+
+#### Claim
+
+Claim rewards
+
+```solidity
+function claim(uint256 _poolId) external
+```
+
+#### Claim referrer rewards
+
+Claim rewards earned as a referrer
+
+```solidity
+function claimReferralRewards() external
+```
+
+#### Withdraw without rewards
+
+In case the reward token somehow becomes untransferable you can withdraw forfeiting your rewards
+
+```solidity
+function emergencyExit(uint256 _poolId) external
+```
+
+#### Getters
+
+Get the amount of DOUGH released every block to the pools
+
+```solidity
+function rewardRate() external view returns (uint256)
+```
+
+The total weight of all pools combined
+
+```solidity
+function totalRewardWeight() external view returns (uint256)
+```
+
+Total amount of reward pools
+
+```solidity
+function poolCount() external view returns (uint256)
+```
+
+Get the deposit token for a pool
+
+```solidity
+function getPoolToken(uint256 _poolId) external view returns (IERC20)
+```
+
+Get the reward weight of a pool
+
+```solidity
+function getPoolRewardWeight(uint256 _poolId) external view returns (uint256)
+```
+
+Get the percentage of rewards that are escrowed for a pool
+
+```solidity
+function getPoolEscrowPercentage(uint256 _poolId) external view returns (uint256)
+```
+
+Get the exit fee of a pool
+
+```solidity
+function getPoolExitFeePercentage(uint256 _poolId) external view returns (uint256)
+```
+
+Get the reward per block for this pool
+
+```solidity
+function getPoolRewardRate(uint256 _poolId) external view returns (uint256)
+```
+
+Get all global and account pool info
+
+```solidity
+function getPools(address _account) external view returns (Pool.ViewData[] memory) 
+```
+
+Get the total deposited for a pool by an account
+
+```solidity
+function getStakeTotalDeposited(address _account, uint256 _poolId) external view returns (uint256)
+```
+
+Get the amount of unclaimed rewards for an account
+
+```solidity
+function getStakeTotalUnclaimed(address _account, uint256 _poolId) external view returns (uint256)
+```
