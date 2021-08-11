@@ -13,6 +13,7 @@ import {Pool} from "./libraries/pools/Pool.sol";
 import {Stake} from "./libraries/pools/Stake.sol";
 
 import {IRewardEscrow} from "./interfaces/IRewardEscrow.sol";
+import {ISharesTimeLock} from "./interfaces/ISharesTimeLock.sol";
 
 /// @title StakingPools
 //    ___    __        __                _               ___                              __         _ 
@@ -151,6 +152,16 @@ contract StakingPools is ReentrancyGuard {
   /// @dev referral escrow percentage for the referrer
   mapping(address => uint256) public referralEscrowPercentageOf;
 
+
+  ISharesTimeLock public sharesTimeLock;
+
+  uint256 public constant STAKE_DURATION = 36;
+
+
+  function setSharesTimeLock(address _timeLock) external onlyGovernance {
+    require(address(sharesTimeLock) == address(0), "StakingPools: SharesTimeLock already set");
+    sharesTimeLock = ISharesTimeLock(_timeLock);
+  }
 
   function initialize(
     IERC20 _reward,
@@ -408,9 +419,12 @@ contract StakingPools is ReentrancyGuard {
     uint256 _escrowedAmount = _amount.mul(referralEscrowPercentageOf[msg.sender]).div(1e18);
 
     if(_escrowedAmount != 0) {
-        // escrow
-        reward.safeTransferFrom(rewardSource, address(rewardEscrow), _escrowedAmount);
-        rewardEscrow.appendVestingEntry(msg.sender, _escrowedAmount);
+        // transfer tokens to this contract
+        reward.safeTransferFrom(rewardSource, address(this), _escrowedAmount);
+        // approve contract to pull tokens
+        reward.safeApprove(address(sharesTimeLock), _escrowedAmount);
+        // deposit
+        sharesTimeLock.depositByMonths(_escrowedAmount, STAKE_DURATION, msg.sender);
     }
 
      uint256 _nonEscrowedAmount = _amount.sub(_escrowedAmount);
@@ -650,9 +664,12 @@ contract StakingPools is ReentrancyGuard {
     uint256 _escrowedAmount = _claimAmount.mul(_pool.escrowPercentage).div(1e18);
 
     if(_escrowedAmount != 0) {
-        // escrow
-        reward.safeTransferFrom(rewardSource, address(rewardEscrow), _escrowedAmount);
-        rewardEscrow.appendVestingEntry(msg.sender, _escrowedAmount);
+        // transfer tokens to this contract
+        reward.safeTransferFrom(rewardSource, address(this), _escrowedAmount);
+        // approve contract to pull tokens
+        reward.safeApprove(address(sharesTimeLock), _escrowedAmount);
+        // deposit
+        sharesTimeLock.depositByMonths(_escrowedAmount, STAKE_DURATION, msg.sender);
     }
 
     uint256 _nonEscrowedAmount = _claimAmount.sub(_escrowedAmount);
