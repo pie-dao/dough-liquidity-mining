@@ -7,6 +7,14 @@ import "@openzeppelin/upgrades/contracts/Initializable.sol";
 
 
 /**
+ * @title SharesTimelock interface
+ */
+interface ISharesTimeLock {
+    function depositByMonths(uint256 amount, uint256 months, address receiver) external;
+}
+
+
+/**
  * @title DoughEscrow interface
  */
 interface IDoughEscrow {
@@ -337,6 +345,42 @@ contract RewardEscrow is Ownable {
         }
     }
 
+    /**
+     * @notice Allow a user to withdraw any DOUGH in their schedule to skip waiting and migrate to veDOUGH at maximum stake.
+     * 
+     */
+    function migrateToVeDOUGH()
+    external
+    {
+        uint numEntries = numVestingEntries(msg.sender);
+        uint total;
+        for (uint i = 0; i < numEntries; i++) {
+            uint qty = getVestingQuantity(msg.sender, i);
+            if (qty == 0) {
+                continue;
+            }
+
+            vestingSchedules[msg.sender][i] = [0, 0];
+            total = total.add(qty);
+        }
+
+        if (total != 0) {
+            totalEscrowedBalance = totalEscrowedBalance.sub(total);
+            totalEscrowedAccountBalance[msg.sender] = totalEscrowedAccountBalance[msg.sender].sub(total);
+            totalVestedAccountBalance[msg.sender] = totalVestedAccountBalance[msg.sender].add(total);
+
+            // Approve DOUGH to Timelock
+            address timeLock = 0x...
+            dough.safeApprove(timeLock, total);
+
+            // Deposit to timelock
+            ISharesTimeLock(timeLock).depositByMonths(migrateAmount, 36, msg.sender)
+
+            emit MigratedToVeDOUGH(msg.sender, now, total);
+            emit Transfer(msg.sender, address(0), total);
+        }
+    }
+
     /* ========== MODIFIERS ========== */
 
     modifier onlyRewardsContract() {
@@ -350,6 +394,8 @@ contract RewardEscrow is Ownable {
     event DoughUpdated(address newDough);
 
     event Vested(address indexed beneficiary, uint time, uint value);
+
+    event MigratedToVeDOUGH(address indexed beneficiary, uint time, uint value);
 
     event VestingEntryCreated(address indexed beneficiary, uint time, uint value);
 
