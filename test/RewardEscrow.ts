@@ -310,11 +310,11 @@ describe('RewardEscrow', function() {
 				await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('2000'));
 				await timeTraveler.increaseTime(WEEK);
 
-				// Need to go into the future to vest
+				// Need to stay in the present to make sure we migrate positions we should not be able to vest
 			});
 
 			it('should revert if timelock is not set', async () => {
-				rewardEscrow.setTimelock('0x0000000000000000000000000000000000000000');
+				rewardEscrow.setTimelock(constants.AddressZero);
 				await expect(rewardEscrow.connect(account1Signer).migrateToVeDOUGH() ).to.be.revertedWith("SharesTimeLock not set");
 			});
 
