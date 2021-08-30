@@ -8,9 +8,11 @@ use(solidity);
 
 import { RewardEscrow } from "../typechain/RewardEscrow";
 import { DoughMock } from "../typechain/DoughMock";
+import { TimelockMock } from "../typechain/TimelockMock";
 
 import RewardEscrowArtifact from "../artifacts/contracts/RewardEscrow.sol/RewardEscrow.json";
 import DoughMockArtifact from "../artifacts/contracts/mock/DoughMock.sol/DoughMock.json";
+import TimelockMockArtifact from "../artifacts/contracts/mock/TimelockMock.sol/TimelockMock.json";
 import { parseEther } from "ethers/lib/utils";
 
 
@@ -32,6 +34,7 @@ describe('RewardEscrow', function() {
     let signers: Signer[];
     let rewardEscrow: RewardEscrow;
     let dough: DoughMock;
+	let timelock: TimelockMock;
     let rewardContract: string;
     let timeTraveler: TimeTraveler;
 
@@ -52,6 +55,7 @@ describe('RewardEscrow', function() {
 
         dough = await deployContract(signers[0], DoughMockArtifact) as DoughMock;
 		rewardEscrow = await deployContract(signers[0], RewardEscrowArtifact) as RewardEscrow
+		timelock = await deployContract(signers[0], TimelockMockArtifact) as TimelockMock;
 		
 		rewardEscrow["initialize(address,string,string)"](dough.address, "TEST", "TEST");
 
@@ -78,6 +82,12 @@ describe('RewardEscrow', function() {
 		});
 
 		it('should allow owner to set dough', async () => {
+			await rewardEscrow.setDough(constants.AddressZero);
+			const doughAddress = await rewardEscrow.dough();
+			expect(doughAddress, constants.AddressZero);
+		});
+
+		it('should allow owner to set timelock', async () => {
 			await rewardEscrow.setDough(constants.AddressZero);
 			const doughAddress = await rewardEscrow.dough();
 			expect(doughAddress, constants.AddressZero);
@@ -285,7 +295,70 @@ describe('RewardEscrow', function() {
 				expect(await rewardEscrow.totalEscrowedBalance()).to.eq(parseEther('0'));
 			});
         });
-        
+       
+		describe('veDOUGH Migration', async () => {
+
+			beforeEach(async () => {
+				// Transfer of DOUGH to the escrow must occur before creating a vestinng entry
+				await dough.transfer(rewardEscrow.address, parseEther('6000'));
+
+				await rewardEscrow.setTimelock(timelock.address);
+
+				// Add a few vesting entries as the feepool address
+				await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('1000'));
+				await timeTraveler.increaseTime(WEEK);
+				await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('2000'));
+				await timeTraveler.increaseTime(WEEK);
+
+				// Need to go into the future to vest
+			});
+
+			it('should revert if timelock is not set', async () => {
+				rewardEscrow.setTimelock('0x0000000000000000000000000000000000000000');
+				await expect(rewardEscrow.connect(account1Signer).migrateToVeDOUGH() ).to.be.revertedWith("SharesTimeLock not set");
+			});
+
+			it('should migrate and emit a MigratedToVeDOUGH', async () => {
+				rewardEscrow.setTimelock(timelock.address);
+				const migrateTransaction = await (await rewardEscrow.connect(account1Signer).migrateToVeDOUGH()).wait(1);
+
+				const migratedEvent = migrateTransaction.events.find(event => event.event === 'MigratedToVeDOUGH');
+                expect(migratedEvent.args.beneficiary).to.eq(account1);
+                expect(migratedEvent.args.value).to.eq(parseEther('3000'));
+			});
+
+			it('should migrate and update totalEscrowedAccountBalance to 0', async () => {
+				// This account should have an escrowedAccountBalance
+				let escrowedAccountBalance = await rewardEscrow.totalEscrowedAccountBalance(account1);
+				expect(escrowedAccountBalance).to.eq(parseEther('3000'));
+
+				// Migrate
+				await rewardEscrow.connect(account1Signer).migrateToVeDOUGH();
+
+				// This account should not have any amount escrowed
+				escrowedAccountBalance = await rewardEscrow.totalEscrowedAccountBalance(account1);
+				expect(escrowedAccountBalance).to.eq(parseEther('0'));
+			});
+
+			it('should migrate and update totalVestedAccountBalance', async () => {
+				// This account should have zero totalVestedAccountBalance
+				let totalVestedAccountBalance = await rewardEscrow.totalVestedAccountBalance(account1);
+				expect(totalVestedAccountBalance).to.eq(parseEther('0'));
+
+				// Migrate
+				await rewardEscrow.connect(account1Signer).migrateToVeDOUGH();
+
+				// This account should have vested its whole amount
+				totalVestedAccountBalance = await rewardEscrow.totalVestedAccountBalance(account1);
+				expect(totalVestedAccountBalance).to.eq(parseEther('3000'));
+			});
+
+			it('should migrate and update totalEscrowedBalance', async () => {
+				await rewardEscrow.connect(account1Signer).migrateToVeDOUGH();
+				// There should be no Escrowed balance left in the contract
+				expect(await rewardEscrow.totalEscrowedBalance()).to.eq(parseEther('0'));
+			});
+        });
 
         describe("Vesting entries", async() => {
             it("Appending when there are no previous entries should create a new one", async() => {

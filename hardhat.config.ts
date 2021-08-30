@@ -33,33 +33,33 @@ const config: HardhatUserConfig = {
       }
     ]
   },
-  networks: {
-    goerli: {
-      url: `https://goerli.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
-      accounts: [
-        process.env.PRIVATE_KEY
-      ],
-      gasPrice: 40000000000
-    },
-    kovan: {
-      url: `https://kovan.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
-      accounts: [
-        process.env.PRIVATE_KEY
-      ]
-    },
-    mainnet: {
-      url: `https://mainnet.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
-      accounts: [
-        process.env.PRIVATE_KEY
-      ],
-    },
-    frame: {
-      url: "http://localhost:1248"
-    }
-  },
-  etherscan: {
-    apiKey: process.env.ETHERSCAN_KEY
-  }
+  // networks: {
+  //   goerli: {
+  //     url: `https://goerli.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
+  //     accounts: [
+  //       process.env.PRIVATE_KEY
+  //     ],
+  //     gasPrice: 40000000000
+  //   },
+  //   kovan: {
+  //     url: `https://kovan.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
+  //     accounts: [
+  //       process.env.PRIVATE_KEY
+  //     ]
+  //   },
+  //   mainnet: {
+  //     url: `https://mainnet.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
+  //     accounts: [
+  //       process.env.PRIVATE_KEY
+  //     ],
+  //   },
+  //   frame: {
+  //     url: "http://localhost:1248"
+  //   }
+  // },
+  // etherscan: {
+  //   apiKey: process.env.ETHERSCAN_KEY
+  // }
 };
 
 

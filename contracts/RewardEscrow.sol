@@ -81,6 +81,9 @@ contract RewardEscrow is Ownable {
     string public name;
     string public symbol;
 
+    uint256 public constant STAKE_DURATION = 36;
+    ISharesTimeLock public sharesTimeLock;
+
 
     /* ========== Initializer ========== */
 
@@ -104,6 +107,17 @@ contract RewardEscrow is Ownable {
     {
         dough = IERC20(_dough);
         emit DoughUpdated(address(_dough));
+    }
+
+    /**
+     * @notice set the dough contract address as we need to transfer DOUGH when the user vests
+     */
+    function setTimelock(address _timelock)
+    external
+    onlyOwner
+    {
+        sharesTimeLock = ISharesTimeLock(_timelock);
+        emit TimelockUpdated(address(_timelock));
     }
 
     /**
@@ -352,6 +366,7 @@ contract RewardEscrow is Ownable {
     function migrateToVeDOUGH()
     external
     {
+        require(address(sharesTimeLock) != address(0), "SharesTimeLock not set");
         uint numEntries = numVestingEntries(msg.sender);
         uint total;
         for (uint i = 0; i < numEntries; i++) {
@@ -370,11 +385,10 @@ contract RewardEscrow is Ownable {
             totalVestedAccountBalance[msg.sender] = totalVestedAccountBalance[msg.sender].add(total);
 
             // Approve DOUGH to Timelock
-            address timeLock = 0x...
-            dough.safeApprove(timeLock, total);
+            dough.safeApprove(address(sharesTimeLock), total);
 
             // Deposit to timelock
-            ISharesTimeLock(timeLock).depositByMonths(migrateAmount, 36, msg.sender)
+            sharesTimeLock.depositByMonths(total, STAKE_DURATION, msg.sender);
 
             emit MigratedToVeDOUGH(msg.sender, now, total);
             emit Transfer(msg.sender, address(0), total);
@@ -392,6 +406,8 @@ contract RewardEscrow is Ownable {
     /* ========== EVENTS ========== */
 
     event DoughUpdated(address newDough);
+
+    event TimelockUpdated(address newTimelock);
 
     event Vested(address indexed beneficiary, uint time, uint value);
 
