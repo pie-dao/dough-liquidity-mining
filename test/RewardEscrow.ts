@@ -296,21 +296,21 @@ describe('RewardEscrow', function() {
 			});
         });
        
-		describe('veDOUGH Migration', async () => {
-
+		describe.only('veDOUGH Migration', async () => {
+			const entryAmounts = [parseEther('1000'), parseEther('2000')];
+			const totalVested = parseEther('3000');
+			
 			beforeEach(async () => {
 				// Transfer of DOUGH to the escrow must occur before creating a vestinng entry
 				await dough.transfer(rewardEscrow.address, parseEther('6000'));
 
 				await rewardEscrow.setTimelock(timelock.address);
-
+				
 				// Add a few vesting entries as the feepool address
-				await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('1000'));
+				await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, entryAmounts[0]);
 				await timeTraveler.increaseTime(WEEK);
-				await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, parseEther('2000'));
+				await rewardEscrow.connect(rewardContractAccountSigner).appendVestingEntry(account1, entryAmounts[1]);
 				await timeTraveler.increaseTime(WEEK);
-
-				// Need to stay in the present to make sure we migrate positions we should not be able to vest
 			});
 
 			it('should revert if timelock is not set', async () => {
@@ -318,21 +318,59 @@ describe('RewardEscrow', function() {
 				await expect(rewardEscrow.connect(account1Signer).migrateToVeDOUGH() ).to.be.revertedWith("SharesTimeLock not set");
 			});
 
-			it('should migrate and emit a MigratedToVeDOUGH', async () => {
+			it('should revert if entries are not mature enough', async () => {
 				rewardEscrow.setTimelock(timelock.address);
+
+				await expect(rewardEscrow.connect(account1Signer).migrateToVeDOUGH() ).to.be.revertedWith("No vesting entries to bridge");
+			});
+
+			it('should migrate and emit a MigratedToVeDOUGH for each entry', async () => {
+				rewardEscrow.setTimelock(timelock.address);
+				
+				timeTraveler.increaseTime(24 * WEEK); // this will increase time to be able to bridge first entry (2 weeks already passed in the beforeEach)
+
+				const migrateTransactionOne = await (await rewardEscrow.connect(account1Signer).migrateToVeDOUGH()).wait(1);
+
+				const migratedEventOne = migrateTransactionOne.events.find(event => event.event === 'MigratedToVeDOUGH');
+
+                expect(migratedEventOne.args.beneficiary).to.eq(account1);
+                expect(migratedEventOne.args.value).to.eq(entryAmounts[0]);
+				
+				timeTraveler.increaseTime(WEEK); // this will increase time to be able to bridge the last entry (one week later)
+
+				const migrateTransactionTwo = await (await rewardEscrow.connect(account1Signer).migrateToVeDOUGH()).wait(1);
+
+				const migratedEventTwo = migrateTransactionTwo.events.find(event => event.event === 'MigratedToVeDOUGH');
+                expect(migratedEventTwo.args.beneficiary).to.eq(account1);
+                expect(migratedEventTwo.args.value).to.eq(entryAmounts[1]);
+			});
+
+			it('should migrate all the vesting entries and emit a MigratedToVeDOUGH', async () => {
+				rewardEscrow.setTimelock(timelock.address);
+				
+				timeTraveler.increaseTime(25 * WEEK); // this will increase time to be able to bridge all the entries
+
 				const migrateTransaction = await (await rewardEscrow.connect(account1Signer).migrateToVeDOUGH()).wait(1);
 
 				const migratedEvent = migrateTransaction.events.find(event => event.event === 'MigratedToVeDOUGH');
                 expect(migratedEvent.args.beneficiary).to.eq(account1);
-                expect(migratedEvent.args.value).to.eq(parseEther('3000'));
+                expect(migratedEvent.args.value).to.eq(totalVested);
+			});
+
+			it('should revert if all entries were bridged', async () => {
+				rewardEscrow.setTimelock(timelock.address);
+				timeTraveler.increaseTime(25 * WEEK); // this will increase time to be able to bridge all the entries
+				await rewardEscrow.connect(account1Signer).migrateToVeDOUGH();
+				await expect(rewardEscrow.connect(account1Signer).migrateToVeDOUGH()).to.be.revertedWith("No vesting entries to bridge");
 			});
 
 			it('should migrate and update totalEscrowedAccountBalance to 0', async () => {
 				// This account should have an escrowedAccountBalance
 				let escrowedAccountBalance = await rewardEscrow.totalEscrowedAccountBalance(account1);
-				expect(escrowedAccountBalance).to.eq(parseEther('3000'));
+				expect(escrowedAccountBalance).to.eq(totalVested);
 
 				// Migrate
+				timeTraveler.increaseTime(25 * WEEK); // this will increase time to be able to bridge all the entries
 				await rewardEscrow.connect(account1Signer).migrateToVeDOUGH();
 
 				// This account should not have any amount escrowed
@@ -346,14 +384,16 @@ describe('RewardEscrow', function() {
 				expect(totalVestedAccountBalance).to.eq(parseEther('0'));
 
 				// Migrate
+				timeTraveler.increaseTime(25 * WEEK); // this will increase time to be able to bridge all the entries
 				await rewardEscrow.connect(account1Signer).migrateToVeDOUGH();
 
 				// This account should have vested its whole amount
 				totalVestedAccountBalance = await rewardEscrow.totalVestedAccountBalance(account1);
-				expect(totalVestedAccountBalance).to.eq(parseEther('3000'));
+				expect(totalVestedAccountBalance).to.eq(totalVested);
 			});
 
 			it('should migrate and update totalEscrowedBalance', async () => {
+				timeTraveler.increaseTime(25 * WEEK); // this will increase time to be able to bridge all the entries
 				await rewardEscrow.connect(account1Signer).migrateToVeDOUGH();
 				// There should be no Escrowed balance left in the contract
 				expect(await rewardEscrow.totalEscrowedBalance()).to.eq(parseEther('0'));

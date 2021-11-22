@@ -367,32 +367,46 @@ contract RewardEscrow is Ownable {
     external
     {
         require(address(sharesTimeLock) != address(0), "SharesTimeLock not set");
-        uint numEntries = numVestingEntries(msg.sender);
+        uint numEntries = numVestingEntries(msg.sender); // get the number of entries for msg.sender
+        
+        /* 
+        // As per PIP-67: 
+        // We propose that a bridge be created to swap eDOUGH to veDOUGH with a non-configurable time lock of 3 years.
+        // Only eDOUGH that has vested for 6+ months will be eligible for this bridge.
+        // https://snapshot.org/#/piedao.eth/proposal/0xaf04cb5391de0cb3d9c9e694a2bf6e5d20f0e4e1c48e0a1d6f85c5233aa580b6
+        */
         uint total;
         for (uint i = 0; i < numEntries; i++) {
-            uint qty = getVestingQuantity(msg.sender, i);
-            if (qty == 0) {
-                continue;
+            uint[2] memory entry = getVestingScheduleEntry(msg.sender, i);        
+            (uint quantity, uint vestingTime) = (entry[QUANTITY_INDEX], entry[TIME_INDEX]);
+            
+            // we check if quantity and vestingTime is greater than 0 (otherwise, the entry was already claimed)
+            if(quantity > 0 && vestingTime > 0) {
+                uint activationTime = entry[TIME_INDEX].sub(26 weeks); // point in time when the bridge becomes possible (52 weeks - 26 weeks = 26 weeks (6 months))
+
+                if(block.timestamp >= activationTime) {
+                    vestingSchedules[msg.sender][i] = [0, 0];
+                    total = total.add(quantity);
+                }
             }
-
-            vestingSchedules[msg.sender][i] = [0, 0];
-            total = total.add(qty);
         }
 
-        if (total != 0) {
-            totalEscrowedBalance = totalEscrowedBalance.sub(total);
-            totalEscrowedAccountBalance[msg.sender] = totalEscrowedAccountBalance[msg.sender].sub(total);
-            totalVestedAccountBalance[msg.sender] = totalVestedAccountBalance[msg.sender].add(total);
+        // require amount to stake > 0, else we emit events and update the state
+        require(total > 0, 'No vesting entries to bridge');
 
-            // Approve DOUGH to Timelock
-            dough.safeApprove(address(sharesTimeLock), total);
+        totalEscrowedBalance = totalEscrowedBalance.sub(total);
+        totalEscrowedAccountBalance[msg.sender] = totalEscrowedAccountBalance[msg.sender].sub(total);
+        totalVestedAccountBalance[msg.sender] = totalVestedAccountBalance[msg.sender].add(total);
 
-            // Deposit to timelock
-            sharesTimeLock.depositByMonths(total, STAKE_DURATION, msg.sender);
+        // Approve DOUGH to Timelock (we need to approve)
+        dough.safeApprove(address(sharesTimeLock), 0);
+        dough.safeApprove(address(sharesTimeLock), total);
 
-            emit MigratedToVeDOUGH(msg.sender, now, total);
-            emit Transfer(msg.sender, address(0), total);
-        }
+        // Deposit to timelock
+        sharesTimeLock.depositByMonths(total, STAKE_DURATION, msg.sender);
+
+        emit MigratedToVeDOUGH(msg.sender, now, total);
+        emit Transfer(msg.sender, address(0), total);
     }
 
     /* ========== MODIFIERS ========== */
