@@ -49,3 +49,11 @@ task("deploy-reward-escrow", "Deploy the dough escrow contract")
 
         console.log(`Intialised at: ${tx.hash}`);
 });
+
+task("upgrade-reward-escrow", "Upgrade the dough escrow contract")
+    .addParam("rewardProxy")
+    .setAction(async(taskArgs, {ethers}) => {
+        const rewardEscrowFactory = await ethers.getContractFactory("RewardEscrow") as RewardEscrowFactory;
+        const rewardEscrow = await rewardEscrowFactory.deploy() as RewardEscrow;
+        console.log(`deployed at: ${rewardEscrow.address}`)
+    });
