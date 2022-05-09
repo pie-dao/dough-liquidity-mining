@@ -7,6 +7,14 @@ import "@openzeppelin/upgrades/contracts/Initializable.sol";
 
 
 /**
+ * @title SharesTimelock interface
+ */
+interface ISharesTimeLock {
+    function depositByMonths(uint256 amount, uint256 months, address receiver) external;
+}
+
+
+/**
  * @title DoughEscrow interface
  */
 interface IDoughEscrow {
@@ -73,6 +81,9 @@ contract RewardEscrow is Ownable {
     string public name;
     string public symbol;
 
+    uint256 public constant STAKE_DURATION = 36;
+    ISharesTimeLock public sharesTimeLock;
+
 
     /* ========== Initializer ========== */
 
@@ -96,6 +107,17 @@ contract RewardEscrow is Ownable {
     {
         dough = IERC20(_dough);
         emit DoughUpdated(address(_dough));
+    }
+
+    /**
+     * @notice set the dough contract address as we need to transfer DOUGH when the user vests
+     */
+    function setTimelock(address _timelock)
+    external
+    onlyOwner
+    {
+        sharesTimeLock = ISharesTimeLock(_timelock);
+        emit TimelockUpdated(address(_timelock));
     }
 
     /**
@@ -337,6 +359,56 @@ contract RewardEscrow is Ownable {
         }
     }
 
+    /**
+     * @notice Allow a user to withdraw any DOUGH in their schedule to skip waiting and migrate to veDOUGH at maximum stake.
+     * 
+     */
+    function migrateToVeDOUGH()
+    external
+    {
+        require(address(sharesTimeLock) != address(0), "SharesTimeLock not set");
+        uint numEntries = numVestingEntries(msg.sender); // get the number of entries for msg.sender
+        
+        /* 
+        // As per PIP-67: 
+        // We propose that a bridge be created to swap eDOUGH to veDOUGH with a non-configurable time lock of 3 years.
+        // Only eDOUGH that has vested for 6+ months will be eligible for this bridge.
+        // https://snapshot.org/#/piedao.eth/proposal/0xaf04cb5391de0cb3d9c9e694a2bf6e5d20f0e4e1c48e0a1d6f85c5233aa580b6
+        */
+        uint total;
+        for (uint i = 0; i < numEntries; i++) {
+            uint[2] memory entry = getVestingScheduleEntry(msg.sender, i);        
+            (uint quantity, uint vestingTime) = (entry[QUANTITY_INDEX], entry[TIME_INDEX]);
+            
+            // we check if quantity and vestingTime is greater than 0 (otherwise, the entry was already claimed)
+            if(quantity > 0 && vestingTime > 0) {
+                uint activationTime = entry[TIME_INDEX].sub(26 weeks); // point in time when the bridge becomes possible (52 weeks - 26 weeks = 26 weeks (6 months))
+
+                if(block.timestamp >= activationTime) {
+                    vestingSchedules[msg.sender][i] = [0, 0];
+                    total = total.add(quantity);
+                }
+            }
+        }
+
+        // require amount to stake > 0, else we emit events and update the state
+        require(total > 0, 'No vesting entries to bridge');
+
+        totalEscrowedBalance = totalEscrowedBalance.sub(total);
+        totalEscrowedAccountBalance[msg.sender] = totalEscrowedAccountBalance[msg.sender].sub(total);
+        totalVestedAccountBalance[msg.sender] = totalVestedAccountBalance[msg.sender].add(total);
+
+        // Approve DOUGH to Timelock (we need to approve)
+        dough.safeApprove(address(sharesTimeLock), 0);
+        dough.safeApprove(address(sharesTimeLock), total);
+
+        // Deposit to timelock
+        sharesTimeLock.depositByMonths(total, STAKE_DURATION, msg.sender);
+
+        emit MigratedToVeDOUGH(msg.sender, now, total);
+        emit Transfer(msg.sender, address(0), total);
+    }
+
     /* ========== MODIFIERS ========== */
 
     modifier onlyRewardsContract() {
@@ -349,7 +421,11 @@ contract RewardEscrow is Ownable {
 
     event DoughUpdated(address newDough);
 
+    event TimelockUpdated(address newTimelock);
+
     event Vested(address indexed beneficiary, uint time, uint value);
+
+    event MigratedToVeDOUGH(address indexed beneficiary, uint time, uint value);
 
     event VestingEntryCreated(address indexed beneficiary, uint time, uint value);
 

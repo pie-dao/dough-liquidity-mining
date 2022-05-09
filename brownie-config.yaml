@@ -1,0 +1,9 @@
+compiler:
+  solc:
+    version: null
+    optimizer:
+      enabled: true
+      runs: 200
+    remappings:
+      - '@openzeppelin=./node_modules/@openzeppelin'
+      - 'hardhat=./node_modules/hardhat'
